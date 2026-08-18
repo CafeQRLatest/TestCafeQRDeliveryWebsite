@@ -1,22 +1,30 @@
 'use client';
+import { useState, useEffect } from 'react';
 import { FiX, FiMinus, FiPlus, FiShoppingBag } from 'react-icons/fi';
 
 export default function CartDrawer({ open, onClose, cart, onAdd, onRemove, onCheckout }) {
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const [remarks, setRemarks] = useState('');
+
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('delivery_remarks');
+      if (saved) setRemarks(saved);
+    } catch { }
+  }, [open]);
+
   return (
     <>
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 bg-black/40 z-40 transition-opacity duration-300 ${
-          open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
+        className={`fixed inset-0 bg-black/40 z-40 transition-opacity duration-300 ${open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+          }`}
         onClick={onClose}
       />
       {/* Drawer */}
       <div
-        className={`fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 ease-out max-h-[85vh] flex flex-col ${
-          open ? 'translate-y-0' : 'translate-y-full'
-        }`}
+        className={`fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 ease-out max-h-[85vh] flex flex-col ${open ? 'translate-y-0' : 'translate-y-full'
+          }`}
       >
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-1">
@@ -74,8 +82,23 @@ export default function CartDrawer({ open, onClose, cart, onAdd, onRemove, onChe
         </div>
         {/* Footer */}
         {cart.length > 0 && (
-          <div className="px-5 py-4 border-t border-stone-100 bg-white">
-            <div className="flex justify-between items-center mb-3">
+          <div className="px-5 py-4 border-t border-stone-100 bg-white space-y-3">
+            <div>
+              <label className="text-xs font-semibold text-stone-600 flex items-center gap-1 mb-1">
+                <span>📝</span>  Instructions / Remarks <span className="text-stone-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                placeholder="E.g., Extra spicy, no onions, leave at door..."
+                value={remarks}
+                onChange={(e) => {
+                  setRemarks(e.target.value);
+                  try { sessionStorage.setItem('delivery_remarks', e.target.value); } catch { }
+                }}
+                className="w-full text-xs px-3.5 py-2.5 border border-stone-200 rounded-xl outline-none focus:border-brand-orange bg-stone-50"
+              />
+            </div>
+            <div className="flex justify-between items-center">
               <span className="text-stone-500 text-sm">Subtotal</span>
               <span className="font-bold text-stone-800">₹{total.toFixed(2)}</span>
             </div>

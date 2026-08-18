@@ -24,9 +24,9 @@ export async function POST(req) {
       'https://cafe-qr-backend.onrender.com/api';
 
     const upstream = await fetch(`${backendUrl}/v1/auth/send-otp`, {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ email }),
+      body: JSON.stringify({ email }),
     });
 
     const data = await upstream.json().catch(() => ({}));
@@ -34,7 +34,7 @@ export async function POST(req) {
     if (!upstream.ok) {
       const message =
         data?.message ||
-        data?.error   ||
+        data?.error ||
         `Backend returned ${upstream.status}`;
       return NextResponse.json({ error: message }, { status: upstream.status });
     }

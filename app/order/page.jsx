@@ -35,34 +35,34 @@ const MOCK_MENU = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 function OrderPageInner() {
-  const searchParams    = useSearchParams();
-  const router          = useRouter();
-  const restaurantId    = searchParams.get('r');
-  const orderType       = searchParams.get('t') || 'DELIVERY';
-  const orgId           = searchParams.get('orgId') || searchParams.get('branchId') || '';
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const restaurantId = searchParams.get('r');
+  const orderType = searchParams.get('t') || 'DELIVERY';
+  const orgId = searchParams.get('orgId') || searchParams.get('branchId') || '';
 
-  const [restaurant, setRestaurant]         = useState(null);
-  const [menu, setMenu]                     = useState([]);
-  const [categories, setCategories]         = useState([]);
+  const [restaurant, setRestaurant] = useState(null);
+  const [menu, setMenu] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [activeCategory, setActiveCategory] = useState(null);
-  const [cart, setCart]                     = useState([]);  // [{ id, name, price, qty }]
-  const [cartOpen, setCartOpen]             = useState(false);
-  const [search, setSearch]                 = useState('');
-  const [vegOnly, setVegOnly]               = useState(false);
-  const [loading, setLoading]               = useState(true);
-  const [error, setError]                   = useState(null);
-  const categoryRefs                        = useRef({});
+  const [cart, setCart] = useState([]);  // [{ id, name, price, qty }]
+  const [cartOpen, setCartOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [vegOnly, setVegOnly] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const categoryRefs = useRef({});
 
   // ── Persist cart to sessionStorage so it survives page refresh ──
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem(`cart_${restaurantId}`);
       if (saved) setCart(JSON.parse(saved));
-    } catch {}
+    } catch { }
   }, [restaurantId]);
 
   useEffect(() => {
-    try { sessionStorage.setItem(`cart_${restaurantId}`, JSON.stringify(cart)); } catch {}
+    try { sessionStorage.setItem(`cart_${restaurantId}`, JSON.stringify(cart)); } catch { }
   }, [cart, restaurantId]);
 
   // ── Fetch restaurant + menu ──────────────────────────────────────
@@ -108,8 +108,8 @@ function OrderPageInner() {
           branchLongitude: rData.branchLongitude || null,
         };
 
-        const items  = Array.isArray(mData) ? mData : (mData.items || mData.products || []);
-        const cats   = [...new Set(items.map(i => i.category || i.categoryName || 'Other'))];
+        const items = Array.isArray(mData) ? mData : (mData.items || mData.products || []);
+        const cats = [...new Set(items.map(i => i.category || i.categoryName || 'Other'))];
 
         setRestaurant(formattedRestaurant);
         try {
@@ -140,10 +140,10 @@ function OrderPageInner() {
   const addItem = (item) => setCart(prev => {
     const existing = prev.find(i => i.id === item.id);
     if (existing) return prev.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i);
-    return [...prev, { 
-      id: item.id, 
-      name: item.name, 
-      price: Number(item.price), 
+    return [...prev, {
+      id: item.id,
+      name: item.name,
+      price: Number(item.price),
       qty: 1,
       taxRate: item.taxRate,
       isPackagedGood: item.isPackagedGood
@@ -190,7 +190,7 @@ function OrderPageInner() {
         </div>
       </div>
       <div className="px-4 mt-4 space-y-3">
-        {[1,2,3,4].map(n => (
+        {[1, 2, 3, 4].map(n => (
           <div key={n} className="bg-white rounded-xl p-4 flex gap-4">
             <div className="flex-1 space-y-2">
               <div className="h-4 w-3/4 bg-stone-200 rounded animate-pulse" />
@@ -281,9 +281,8 @@ function OrderPageInner() {
           </div>
           <button
             onClick={() => setVegOnly(v => !v)}
-            className={`flex-shrink-0 text-xs font-semibold px-3 py-2.5 rounded-xl border-2 transition-colors ${
-              vegOnly ? 'bg-green-500 text-white border-green-500' : 'border-stone-200 text-stone-500 bg-white'
-            }`}
+            className={`flex-shrink-0 text-xs font-semibold px-3 py-2.5 rounded-xl border-2 transition-colors ${vegOnly ? 'bg-green-500 text-white border-green-500' : 'border-stone-200 text-stone-500 bg-white'
+              }`}
           >
             🥦 Veg
           </button>
@@ -294,19 +293,17 @@ function OrderPageInner() {
           <div className="flex gap-2 px-4 pb-2.5 overflow-x-auto scrollbar-hide">
             <button
               onClick={() => { setActiveCategory(null); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-              className={`flex-shrink-0 text-xs font-semibold px-4 py-2 rounded-full border transition-colors ${
-                !activeCategory ? 'bg-brand-orange text-white border-brand-orange' : 'bg-white text-stone-600 border-stone-200'
-              }`}
+              className={`flex-shrink-0 text-xs font-semibold px-4 py-2 rounded-full border transition-colors ${!activeCategory ? 'bg-brand-orange text-white border-brand-orange' : 'bg-white text-stone-600 border-stone-200'
+                }`}
             >All</button>
             {categories.map(cat => (
               <button
                 key={cat}
                 onClick={() => scrollToCategory(cat)}
-                className={`flex-shrink-0 text-xs font-semibold px-4 py-2 rounded-full border transition-colors ${
-                  activeCategory === cat
+                className={`flex-shrink-0 text-xs font-semibold px-4 py-2 rounded-full border transition-colors ${activeCategory === cat
                     ? 'bg-brand-orange text-white border-brand-orange'
                     : 'bg-white text-stone-600 border-stone-200 hover:border-brand-orange hover:text-brand-orange'
-                }`}
+                  }`}
               >{cat}</button>
             ))}
           </div>
@@ -359,7 +356,7 @@ function OrderPageInner() {
         onCheckout={() => {
           setCartOpen(false);
           // Pass cart via sessionStorage so checkout page can read it
-          try { sessionStorage.setItem(`cart_${restaurantId}`, JSON.stringify(cart)); } catch {}
+          try { sessionStorage.setItem(`cart_${restaurantId}`, JSON.stringify(cart)); } catch { }
           router.push(`/checkout?r=${restaurantId}&t=${orderType}${orgId ? `&orgId=${orgId}` : ''}`);
         }}
       />

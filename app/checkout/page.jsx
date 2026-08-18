@@ -38,16 +38,17 @@ function CheckoutPageInner() {
   const [latitude, setLatitude] = useState(10.528392);
   const [longitude, setLongitude] = useState(76.213928);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [remarks, setRemarks] = useState('');
 
   const haversineDistanceKm = (lat1, lon1, lat2, lon2) => {
     const R = 6371; // km
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
 
@@ -232,6 +233,11 @@ function CheckoutPageInner() {
       .then(data => { if (data?.email) setEmail(data.email); })
       .catch(() => { })
       .finally(() => setSessionLoading(false));
+
+    try {
+      const saved = sessionStorage.getItem('delivery_remarks');
+      if (saved) setRemarks(saved);
+    } catch { }
   }, []);
 
   // --- GST and Totals Calculations ---
@@ -329,6 +335,7 @@ function CheckoutPageInner() {
         fulfillmentType: orderType,
         deliveryAddress: deliveryAddressStr,
         note: `Payment: ${payment}`,
+        remarks: remarks,
         items: cart.map(i => ({ productId: i.id, quantity: i.qty })),
         latitude: orderType === 'DELIVERY' ? latitude : null,
         longitude: orderType === 'DELIVERY' ? longitude : null,
@@ -344,7 +351,10 @@ function CheckoutPageInner() {
         orderId = 'DEL-' + Math.random().toString(36).slice(2, 8).toUpperCase();
       }
 
-      try { sessionStorage.removeItem(`cart_${restaurantId}`); } catch { }
+      try {
+        sessionStorage.removeItem(`cart_${restaurantId}`);
+        sessionStorage.removeItem('delivery_remarks');
+      } catch { }
       router.push(`/track?id=${orderId}&r=${restaurantId}${orgId ? `&orgId=${orgId}` : ''}`);
     } finally {
       setPlacing(false);
@@ -520,6 +530,15 @@ function CheckoutPageInner() {
                   <p className="text-xs text-amber-700">+91 {phone}</p>
                   <p className="text-xs text-amber-700">{email}</p>
                 </div>
+                <div className="mt-4 pt-2 border-t border-amber-200">
+                  <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">Cooking Instructions / Remarks (Optional)</label>
+                  <textarea
+                    className="w-full mt-1.5 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-brand-orange resize-none h-20"
+                    placeholder="E.g., Make it spicy, No onions..."
+                    value={remarks}
+                    onChange={e => setRemarks(e.target.value)}
+                  />
+                </div>
               </div>
             ) : (
               <div className="space-y-4">
@@ -549,9 +568,8 @@ function CheckoutPageInner() {
                   <div className="flex-1">
                     <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">City</label>
                     <input
-                      className={`w-full mt-1.5 border rounded-xl px-4 py-3 text-sm outline-none transition-colors ${
-                        errors.city ? 'border-red-400 bg-red-50' : 'border-stone-200 focus:border-brand-orange'
-                      }`}
+                      className={`w-full mt-1.5 border rounded-xl px-4 py-3 text-sm outline-none transition-colors ${errors.city ? 'border-red-400 bg-red-50' : 'border-stone-200 focus:border-brand-orange'
+                        }`}
                       placeholder="Thrissur"
                       value={address.city}
                       onChange={e => {
@@ -564,9 +582,8 @@ function CheckoutPageInner() {
                   <div className="flex-1">
                     <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">Pincode</label>
                     <input
-                      className={`w-full mt-1.5 border rounded-xl px-4 py-3 text-sm outline-none transition-colors ${
-                        errors.pincode ? 'border-red-400 bg-red-50' : 'border-stone-200 focus:border-brand-orange'
-                      }`}
+                      className={`w-full mt-1.5 border rounded-xl px-4 py-3 text-sm outline-none transition-colors ${errors.pincode ? 'border-red-400 bg-red-50' : 'border-stone-200 focus:border-brand-orange'
+                        }`}
                       placeholder="680001"
                       value={address.pincode}
                       onChange={e => { setAddress(p => ({ ...p, pincode: e.target.value })); setErrors(p => ({ ...p, pincode: '' })); }}
@@ -576,22 +593,34 @@ function CheckoutPageInner() {
                     {errors.pincode && <p className="text-xs text-red-500 mt-1">{errors.pincode}</p>}
                   </div>
                 </div>
+
+                <div className="mt-2 pt-2 border-t border-stone-100">
+                  <label className="text-xs font-semibold text-stone-700 uppercase tracking-wide flex items-center gap-1">
+                    📝 Instructions / Remarks <span className="text-stone-400 font-normal lowercase">(optional)</span>
+                  </label>
+                  <textarea
+                    className="w-full mt-1.5 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-brand-orange resize-none h-20 bg-stone-50/50"
+                    placeholder="E.g., Make it spicy, No onions, Leave at door..."
+                    value={remarks}
+                    onChange={e => setRemarks(e.target.value)}
+                  />
+                </div>
+
                 {/* Leaflet Map Picker */}
                 {mapLoaded && (
-                  <div className="space-y-2 mt-4">
+                  <div className="space-y-2 mt-4 pt-2 border-t border-stone-100">
                     <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Pin Your Location on Map</label>
                     <div id="map-picker" className="h-60 w-full rounded-xl border border-stone-200 overflow-hidden z-0" />
                     <p className="text-[10px] text-stone-400">Drag the red marker or click on the map to pin your exact delivery location.</p>
-                    
+
                     {/* Real-time distance and delivery zone status */}
                     {hasBranchCoords && currentDistanceKm != null && (
-                      <div className={`mt-3 p-3.5 rounded-xl border flex flex-col gap-1.5 transition-all duration-300 ${
-                        deliveryRadiusEnforced
-                          ? currentDistanceKm > Number(restaurant.deliveryRadiusKm)
-                            ? 'bg-red-50 border-red-200 text-red-700'
-                            : 'bg-green-50 border-green-200 text-green-700'
-                          : 'bg-stone-50 border-stone-200 text-stone-700'
-                      }`}>
+                      <div className={`mt-3 p-3.5 rounded-xl border flex flex-col gap-1.5 transition-all duration-300 ${deliveryRadiusEnforced
+                        ? currentDistanceKm > Number(restaurant.deliveryRadiusKm)
+                          ? 'bg-red-50 border-red-200 text-red-700'
+                          : 'bg-green-50 border-green-200 text-green-700'
+                        : 'bg-stone-50 border-stone-200 text-stone-700'
+                        }`}>
                         <div className="flex items-center justify-between text-xs font-semibold">
                           <span className="flex items-center gap-1.5">
                             {deliveryRadiusEnforced

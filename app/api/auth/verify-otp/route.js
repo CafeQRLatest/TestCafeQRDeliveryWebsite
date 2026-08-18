@@ -10,10 +10,10 @@
 // Response 4xx:  { error: string }
 
 import { NextResponse } from 'next/server';
-import { createHmac }   from 'crypto';
+import { createHmac } from 'crypto';
 
 const SESSION_TTL_DAYS = 7;
-const SESSION_COOKIE   = 'delivery_session';
+const SESSION_COOKIE = 'delivery_session';
 
 function buildSessionToken({ email, name = '', phone = '' }) {
   const payload = Buffer
@@ -44,9 +44,9 @@ export async function POST(req) {
       'https://cafe-qr-backend.onrender.com/api';
 
     const upstream = await fetch(`${backendUrl}/v1/auth/customer/verify-otp`, {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ email, otp }),
+      body: JSON.stringify({ email, otp }),
     });
 
     const data = await upstream.json().catch(() => ({}));
@@ -54,35 +54,35 @@ export async function POST(req) {
     if (!upstream.ok) {
       const message =
         data?.message ||
-        data?.error   ||
+        data?.error ||
         `Verification failed (${upstream.status})`;
       return NextResponse.json({ error: message }, { status: upstream.status });
     }
 
     // ── OTP verified — issue session cookie ──────────────────────────────────
-    const resolvedName  = data?.data?.name  || name  || '';
+    const resolvedName = data?.data?.name || name || '';
     const resolvedPhone = data?.data?.phone || phone || '';
     const resolvedEmail = data?.data?.email || email;
 
     const token = buildSessionToken({
       email: resolvedEmail,
-      name:  resolvedName,
+      name: resolvedName,
       phone: resolvedPhone,
     });
 
     const response = NextResponse.json({
       verified: true,
-      email:    resolvedEmail,
-      name:     resolvedName,
-      phone:    resolvedPhone,
+      email: resolvedEmail,
+      name: resolvedName,
+      phone: resolvedPhone,
     });
 
     response.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
-      secure:   process.env.APP_ENV !== 'development',
+      secure: process.env.APP_ENV !== 'development',
       sameSite: 'lax',
-      path:     '/',
-      maxAge:   SESSION_TTL_DAYS * 24 * 60 * 60,
+      path: '/',
+      maxAge: SESSION_TTL_DAYS * 24 * 60 * 60,
     });
 
     return response;

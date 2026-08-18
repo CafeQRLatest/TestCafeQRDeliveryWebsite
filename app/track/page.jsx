@@ -258,8 +258,8 @@ function TrackPageInner() {
                   {/* Line + circle */}
                   <div className="flex flex-col items-center">
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 border-2 transition-all ${done ? 'bg-green-500 border-green-500 text-white' :
-                        current ? 'bg-brand-orange border-brand-orange text-white' :
-                          'bg-white border-stone-200 text-stone-300'
+                      current ? 'bg-brand-orange border-brand-orange text-white' :
+                        'bg-white border-stone-200 text-stone-300'
                       }`}>
                       <Icon size={16} />
                     </div>
@@ -311,6 +311,12 @@ function TrackPageInner() {
               </div>
             );
           })}
+          {order.remarks && (
+            <div className="mt-3 pt-3 border-t border-stone-100">
+              <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">Remarks / Instructions</p>
+              <p className="text-sm text-stone-700 bg-stone-50 p-3 rounded-xl border border-stone-100">{order.remarks}</p>
+            </div>
+          )}
           {(order.grandTotal != null || order.total != null) && (
             <div className="border-t border-stone-100 mt-2 pt-2 flex justify-between font-bold text-stone-900">
               <span>Total</span><span>₹{order.grandTotal ?? order.total}</span>
