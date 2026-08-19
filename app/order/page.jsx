@@ -34,6 +34,83 @@ const MOCK_MENU = [
 ];
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Helper to get display metadata and feature toggles based on branch posType
+ */
+function getBusinessCategoryInfo(posType = 'Restaurant') {
+  const norm = String(posType || '').toUpperCase();
+  
+  const isBoutique = norm.includes('BOUTIQUE') || norm.includes('FASHION') || norm.includes('APPAREL') || norm.includes('CLOTH');
+  const isGrocery = norm.includes('GROCERY') || norm.includes('SUPERMARKET') || norm.includes('MART');
+  const isBakery = norm.includes('BAKERY') || norm.includes('BAKE') || norm.includes('PASTRY') || norm.includes('CAKE');
+  const isSalon = norm.includes('SALON') || norm.includes('SPA') || norm.includes('BEAUTY');
+  const isRetail = norm.includes('OTHER') || norm.includes('RETAIL') || norm.includes('STORE');
+  const isFood = !isBoutique && !isGrocery && !isSalon && !isRetail;
+
+  if (isBoutique) {
+    return {
+      isFood: false,
+      heroEmoji: '👗',
+      placeholderEmoji: '👗',
+      searchPlaceholder: 'Search boutique items…',
+      categoryLabel: 'Boutique & Fashion',
+      showVegFilter: false,
+      showVegBadge: false,
+    };
+  } else if (isGrocery) {
+    return {
+      isFood: false,
+      heroEmoji: '🛒',
+      placeholderEmoji: '📦',
+      searchPlaceholder: 'Search groceries & items…',
+      categoryLabel: 'Grocery & Mart',
+      showVegFilter: false,
+      showVegBadge: false,
+    };
+  } else if (isBakery) {
+    return {
+      isFood: true,
+      heroEmoji: '🥐',
+      placeholderEmoji: '🧁',
+      searchPlaceholder: 'Search bakes & treats…',
+      categoryLabel: 'Bakery & Pastry',
+      showVegFilter: true,
+      showVegBadge: true,
+    };
+  } else if (isSalon) {
+    return {
+      isFood: false,
+      heroEmoji: '💇',
+      placeholderEmoji: '🧴',
+      searchPlaceholder: 'Search services & products…',
+      categoryLabel: 'Salon & Spa',
+      showVegFilter: false,
+      showVegBadge: false,
+    };
+  } else if (isRetail) {
+    return {
+      isFood: false,
+      heroEmoji: '🛍️',
+      placeholderEmoji: '📦',
+      searchPlaceholder: 'Search products…',
+      categoryLabel: 'Retail & General Store',
+      showVegFilter: false,
+      showVegBadge: false,
+    };
+  } else {
+    // Restaurant / Cafe / QSR
+    return {
+      isFood: true,
+      heroEmoji: '🍽️',
+      placeholderEmoji: '🥘',
+      searchPlaceholder: 'Search menu…',
+      categoryLabel: posType || 'Restaurant',
+      showVegFilter: true,
+      showVegBadge: true,
+    };
+  }
+}
+
 function OrderPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -52,6 +129,8 @@ function OrderPageInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const categoryRefs = useRef({});
+
+  const categoryInfo = getBusinessCategoryInfo(restaurant?.posType);
 
   // ── Persist cart to sessionStorage so it survives page refresh ──
   useEffect(() => {
@@ -95,6 +174,7 @@ function OrderPageInner() {
           rating: rData.rating || 4.5,
           delivery_time: rData.estimatedDeliveryMinutes ? `${rData.estimatedDeliveryMinutes} min` : '40 min',
           min_order: rData.minOrderAmount || 0,
+          posType: rData.posType || 'Restaurant',
           // Tax settings
           taxEnabled: rData.taxEnabled || false,
           taxLabelGlobal: rData.taxLabelGlobal || 'GST',
@@ -172,7 +252,7 @@ function OrderPageInner() {
       (i.name || '').toLowerCase().includes(search.toLowerCase()) ||
       (i.description || '').toLowerCase().includes(search.toLowerCase());
     const isVeg = i.isVeg ?? i.is_veg ?? (i.productType === 'VEG' || i.productType === 'Vegetarian');
-    const matchVeg = !vegOnly || isVeg;
+    const matchVeg = !vegOnly || !categoryInfo.showVegFilter || isVeg;
     return matchSearch && matchVeg;
   });
 
@@ -211,7 +291,7 @@ function OrderPageInner() {
   if (error) return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
       <span className="text-5xl">😕</span>
-      <h2 className="font-bold text-stone-800 text-lg">Could not load menu</h2>
+      <h2 className="font-bold text-stone-800 text-lg">Could not load items</h2>
       <p className="text-stone-400 text-sm">{error}</p>
       <button onClick={() => window.location.reload()} className="bg-brand-orange text-white px-6 py-3 rounded-xl font-semibold text-sm">
         Try Again
@@ -222,11 +302,11 @@ function OrderPageInner() {
   return (
     <div className="min-h-screen bg-stone-50">
 
-      {/* Restaurant Hero */}
+      {/* Restaurant / Store Hero */}
       <div className="bg-white">
         <div className="h-40 bg-gradient-to-br from-orange-400 to-red-500 relative overflow-hidden">
           <div className="absolute inset-0 flex items-center justify-center opacity-20">
-            <span className="text-8xl">🍽️</span>
+            <span className="text-8xl">{categoryInfo.heroEmoji}</span>
           </div>
           {/* Back button */}
           <button
@@ -244,7 +324,14 @@ function OrderPageInner() {
         <div className="px-4 py-4">
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-xl font-bold text-stone-900">{restaurant?.name}</h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl font-bold text-stone-900">{restaurant?.name}</h1>
+                {categoryInfo.categoryLabel && (
+                  <span className="bg-orange-50 text-brand-orange border border-orange-200 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    {categoryInfo.categoryLabel}
+                  </span>
+                )}
+              </div>
               <p className="text-stone-500 text-sm mt-0.5">{restaurant?.tagline || restaurant?.description}</p>
             </div>
           </div>
@@ -277,19 +364,21 @@ function OrderPageInner() {
             <FiSearch size={15} className="text-stone-400 flex-shrink-0" />
             <input
               type="text"
-              placeholder="Search menu…"
+              placeholder={categoryInfo.searchPlaceholder}
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="bg-transparent flex-1 text-sm text-stone-700 outline-none placeholder-stone-400 min-w-0"
             />
           </div>
-          <button
-            onClick={() => setVegOnly(v => !v)}
-            className={`flex-shrink-0 text-xs font-semibold px-3 py-2.5 rounded-xl border-2 transition-colors ${vegOnly ? 'bg-green-500 text-white border-green-500' : 'border-stone-200 text-stone-500 bg-white'
-              }`}
-          >
-            🥦 Veg
-          </button>
+          {categoryInfo.showVegFilter && (
+            <button
+              onClick={() => setVegOnly(v => !v)}
+              className={`flex-shrink-0 text-xs font-semibold px-3 py-2.5 rounded-xl border-2 transition-colors ${vegOnly ? 'bg-green-500 text-white border-green-500' : 'border-stone-200 text-stone-500 bg-white'
+                }`}
+            >
+              🥦 Veg
+            </button>
+          )}
         </div>
 
         {/* Category pills (hidden during search) */}
@@ -314,13 +403,21 @@ function OrderPageInner() {
         )}
       </div>
 
-      {/* Menu */}
+      {/* Menu / Catalog Items */}
       <div className="pb-28">
         {search || vegOnly ? (
           <div className="bg-white mx-4 mt-3 rounded-xl px-4">
             <p className="text-xs text-stone-400 pt-3 pb-1">{filtered.length} items</p>
             {filtered.map(item => (
-              <MenuItemCard key={item.id} item={item} qty={getQty(item.id)} onAdd={addItem} onRemove={removeItem} />
+              <MenuItemCard
+                key={item.id}
+                item={item}
+                qty={getQty(item.id)}
+                onAdd={addItem}
+                onRemove={removeItem}
+                showVegBadge={categoryInfo.showVegBadge}
+                defaultEmoji={categoryInfo.placeholderEmoji}
+              />
             ))}
             {filtered.length === 0 && (
               <div className="py-12 text-center">
@@ -338,7 +435,15 @@ function OrderPageInner() {
                 </div>
                 <div className="bg-white mx-4 rounded-xl px-4">
                   {grouped[cat].map(item => (
-                    <MenuItemCard key={item.id} item={item} qty={getQty(item.id)} onAdd={addItem} onRemove={removeItem} />
+                    <MenuItemCard
+                      key={item.id}
+                      item={item}
+                      qty={getQty(item.id)}
+                      onAdd={addItem}
+                      onRemove={removeItem}
+                      showVegBadge={categoryInfo.showVegBadge}
+                      defaultEmoji={categoryInfo.placeholderEmoji}
+                    />
                   ))}
                 </div>
               </div>

@@ -1,9 +1,10 @@
 'use client';
 import { FiPlus, FiMinus } from 'react-icons/fi';
 
-export default function MenuItemCard({ item, qty, onAdd, onRemove }) {
+export default function MenuItemCard({ item, qty, onAdd, onRemove, showVegBadge = true, defaultEmoji = null }) {
   const imageUrl = item.imageUrl || item.image_url;
   const isVeg = item.isVeg ?? item.is_veg ?? (item.productType === 'VEG' || item.productType === 'Vegetarian');
+  const fallbackIcon = defaultEmoji || (isVeg ? '🥬' : '🍗');
 
   return (
     <div className="flex gap-3 py-4 border-b border-stone-100 last:border-0 animate-fade-in">
@@ -23,25 +24,27 @@ export default function MenuItemCard({ item, qty, onAdd, onRemove }) {
             }}
           />
           <div className="w-full h-full items-center justify-center bg-stone-100 rounded-xl" style={{ display: 'none' }}>
-            <span className="text-3xl">{isVeg ? '🥬' : '🍗'}</span>
+            <span className="text-3xl">{fallbackIcon}</span>
           </div>
         </div>
       ) : (
         <div className="w-24 h-24 rounded-xl bg-stone-100 flex items-center justify-center flex-shrink-0">
-          <span className="text-3xl">{isVeg ? '🥬' : '🍗'}</span>
+          <span className="text-3xl">{fallbackIcon}</span>
         </div>
       )}
       {/* Details */}
       <div className="flex-1 min-w-0">
-        {/* Veg/Non-veg dot */}
+        {/* Veg/Non-veg dot & Badges */}
         <div className="flex items-center gap-1.5 mb-1">
-          <div className={`w-3.5 h-3.5 rounded-sm border-2 flex items-center justify-center ${
-            isVeg ? 'border-green-600' : 'border-red-600'
-          }`}>
-            <div className={`w-1.5 h-1.5 rounded-full ${
-              isVeg ? 'bg-green-600' : 'bg-red-600'
-            }`} />
-          </div>
+          {showVegBadge && (
+            <div className={`w-3.5 h-3.5 rounded-sm border-2 flex items-center justify-center ${
+              isVeg ? 'border-green-600' : 'border-red-600'
+            }`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${
+                isVeg ? 'bg-green-600' : 'bg-red-600'
+              }`} />
+            </div>
+          )}
           {(item.is_bestseller || item.isBestseller) && (
             <span className="text-xs text-amber-600 font-medium">Bestseller</span>
           )}

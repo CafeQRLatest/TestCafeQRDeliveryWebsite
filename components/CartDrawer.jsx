@@ -89,7 +89,7 @@ export default function CartDrawer({ open, onClose, cart, onAdd, onRemove, onChe
               </label>
               <input
                 type="text"
-                placeholder="E.g., Extra spicy, no onions, leave at door..."
+                placeholder="E.g., Leave at door, call on arrival, special instructions..."
                 value={remarks}
                 onChange={(e) => {
                   setRemarks(e.target.value);
