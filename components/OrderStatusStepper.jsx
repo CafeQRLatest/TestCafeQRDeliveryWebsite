@@ -1,20 +1,27 @@
 'use client';
 import { FiCheck } from 'react-icons/fi';
 
-const STEPS = [
-  { key: 'PENDING',   label: 'Order Received',    emoji: '📋' },
-  { key: 'CONFIRMED', label: 'Confirmed',          emoji: '✅' },
-  { key: 'PREPARING', label: 'Being Prepared',     emoji: '👨‍🍳' },
-  { key: 'ASSIGNED',  label: 'Agent Assigned',     emoji: '🛵' },
-  { key: 'PICKED_UP', label: 'On the Way',         emoji: '🚀' },
-  { key: 'DELIVERED', label: 'Delivered',          emoji: '🎉' },
-];
+export default function OrderStatusStepper({ status, posType = 'Restaurant' }) {
+  const norm = String(posType || '').toUpperCase();
+  const isRetail = norm.includes('BOUTIQUE') || norm.includes('GROCERY') || norm.includes('RETAIL') || norm.includes('STORE') || norm.includes('SALON');
+  const isBakery = norm.includes('BAKERY') || norm.includes('CAKE');
 
-export default function OrderStatusStepper({ status }) {
-  const currentIdx = STEPS.findIndex(s => s.key === status);
+  const prepEmoji = isRetail ? '🛍️' : isBakery ? '🥐' : '👨‍🍳';
+  const prepLabel = isRetail ? 'Being Packed' : isBakery ? 'Baking Fresh' : 'Being Prepared';
+
+  const steps = [
+    { key: 'PENDING',   label: 'Order Received', emoji: '📋' },
+    { key: 'CONFIRMED', label: 'Confirmed',       emoji: '✅' },
+    { key: 'PREPARING', label: prepLabel,         emoji: prepEmoji },
+    { key: 'ASSIGNED',  label: 'Agent Assigned',  emoji: '🛵' },
+    { key: 'PICKED_UP', label: 'On the Way',      emoji: '🚀' },
+    { key: 'DELIVERED', label: 'Delivered',       emoji: '🎉' },
+  ];
+
+  const currentIdx = steps.findIndex(s => s.key === status);
   return (
     <div className="py-2">
-      {STEPS.map((step, idx) => {
+      {steps.map((step, idx) => {
         const done    = idx < currentIdx;
         const active  = idx === currentIdx;
         const pending = idx > currentIdx;
@@ -29,7 +36,7 @@ export default function OrderStatusStepper({ status }) {
               }`}>
                 {done ? <FiCheck size={16} /> : step.emoji}
               </div>
-              {idx < STEPS.length - 1 && (
+              {idx < steps.length - 1 && (
                 <div className={`w-0.5 h-8 mt-1 ${
                   done ? 'bg-green-400' : 'bg-stone-200'
                 }`} />

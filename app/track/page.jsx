@@ -1,22 +1,158 @@
 'use client';
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { FiCheck, FiClock, FiPackage, FiTruck, FiHome } from 'react-icons/fi';
+import { FiCheck, FiClock, FiPackage, FiTruck, FiHome, FiShoppingBag, FiScissors } from 'react-icons/fi';
 import { getOrderStatus } from '@/lib/apiClient';
 
-const ORDER_STEPS = [
-  { key: 'PLACED', label: 'Order Placed', icon: FiCheck, desc: 'Your order has been received' },
-  { key: 'CONFIRMED', label: 'Order Confirmed', icon: FiPackage, desc: 'Restaurant is preparing your food' },
-  { key: 'READY', label: 'Food Ready', icon: FiClock, desc: 'Your order is ready' },
-  { key: 'OUT', label: 'Out for Delivery', icon: FiTruck, desc: 'On the way to you' },
-  { key: 'DELIVERED', label: 'Delivered', icon: FiHome, desc: 'Enjoy your meal!' },
-];
+/**
+ * Returns dynamic stepper steps, banner text, and labels customized to the branch's business category
+ */
+function getOrderWorkflowConfig(posType = 'Restaurant', orderType = 'DELIVERY', outletName = '') {
+  const norm = String(posType || '').toUpperCase();
+  const isTakeaway = String(orderType).toUpperCase() === 'TAKEAWAY';
 
-const TAKEAWAY_STEPS = [
-  { key: 'PLACED', label: 'Order Placed', icon: FiCheck, desc: 'Your order has been received' },
-  { key: 'CONFIRMED', label: 'Confirmed', icon: FiPackage, desc: 'Restaurant is preparing your order' },
-  { key: 'READY', label: 'Ready for Pickup', icon: FiClock, desc: 'Your order is ready! Head over to pick up.' },
-];
+  // 1. Boutique / Fashion / Apparel
+  if (norm.includes('BOUTIQUE') || norm.includes('FASHION') || norm.includes('APPAREL') || norm.includes('CLOTH')) {
+    const deliverySteps = [
+      { key: 'PLACED', label: 'Order Placed', icon: FiCheck, desc: 'Your order has been received' },
+      { key: 'CONFIRMED', label: 'Order Confirmed', icon: FiPackage, desc: 'Store is packing your items' },
+      { key: 'READY', label: 'Package Ready', icon: FiClock, desc: 'Packed & ready for dispatch' },
+      { key: 'OUT', label: 'Out for Delivery', icon: FiTruck, desc: 'Delivery partner is on the way' },
+      { key: 'DELIVERED', label: 'Delivered', icon: FiHome, desc: 'Package delivered! Thank you for shopping with us.' },
+    ];
+    const takeawaySteps = [
+      { key: 'PLACED', label: 'Order Placed', icon: FiCheck, desc: 'Your order has been received' },
+      { key: 'CONFIRMED', label: 'Confirmed', icon: FiPackage, desc: 'Store is preparing your package' },
+      { key: 'READY', label: 'Ready for Pickup', icon: FiClock, desc: 'Your package is ready! Visit us to collect.' },
+    ];
+    return {
+      steps: isTakeaway ? takeawaySteps : deliverySteps,
+      deliveredBannerTitle: isTakeaway ? 'Package Ready for Pickup!' : 'Package Delivered!',
+      deliveredBannerSub: 'Thank you for shopping with us! We hope you love your purchase.',
+      declinedBannerSub: `This order was declined by ${outletName || 'the boutique'}.`,
+      originMapLabel: outletName || 'Boutique Store',
+      itemsSectionTitle: 'Purchased Items',
+    };
+  }
+
+  // 2. Grocery / Supermarket / Mart / FMCG
+  if (norm.includes('GROCERY') || norm.includes('SUPERMARKET') || norm.includes('MART')) {
+    const deliverySteps = [
+      { key: 'PLACED', label: 'Order Placed', icon: FiCheck, desc: 'Your order has been received' },
+      { key: 'CONFIRMED', label: 'Order Confirmed', icon: FiPackage, desc: 'Store is gathering & packing your items' },
+      { key: 'READY', label: 'Groceries Packed', icon: FiClock, desc: 'Items bagged & ready for dispatch' },
+      { key: 'OUT', label: 'Out for Delivery', icon: FiTruck, desc: 'Delivery partner is on the way' },
+      { key: 'DELIVERED', label: 'Delivered', icon: FiHome, desc: 'Groceries delivered! Thank you for ordering.' },
+    ];
+    const takeawaySteps = [
+      { key: 'PLACED', label: 'Order Placed', icon: FiCheck, desc: 'Your order has been received' },
+      { key: 'CONFIRMED', label: 'Confirmed', icon: FiPackage, desc: 'Store is gathering your groceries' },
+      { key: 'READY', label: 'Ready for Pickup', icon: FiClock, desc: 'Your groceries are packed & ready for pickup.' },
+    ];
+    return {
+      steps: isTakeaway ? takeawaySteps : deliverySteps,
+      deliveredBannerTitle: isTakeaway ? 'Groceries Ready for Pickup!' : 'Groceries Delivered!',
+      deliveredBannerSub: 'Thank you for ordering with us!',
+      declinedBannerSub: `This order was declined by ${outletName || 'the store'}.`,
+      originMapLabel: outletName || 'Grocery Mart',
+      itemsSectionTitle: 'Grocery Items',
+    };
+  }
+
+  // 3. Bakery / Pastry / Confectionery
+  if (norm.includes('BAKERY') || norm.includes('BAKE') || norm.includes('PASTRY') || norm.includes('CAKE')) {
+    const deliverySteps = [
+      { key: 'PLACED', label: 'Order Placed', icon: FiCheck, desc: 'Your order has been received' },
+      { key: 'CONFIRMED', label: 'Order Confirmed', icon: FiPackage, desc: 'Bakery is preparing your bakes & treats' },
+      { key: 'READY', label: 'Bakes Ready', icon: FiClock, desc: 'Fresh bakes packed & ready for dispatch' },
+      { key: 'OUT', label: 'Out for Delivery', icon: FiTruck, desc: 'Rider is on the way to you' },
+      { key: 'DELIVERED', label: 'Delivered', icon: FiHome, desc: 'Enjoy your fresh bakes! Thank you.' },
+    ];
+    const takeawaySteps = [
+      { key: 'PLACED', label: 'Order Placed', icon: FiCheck, desc: 'Your order has been received' },
+      { key: 'CONFIRMED', label: 'Confirmed', icon: FiPackage, desc: 'Bakery is packing your bakes' },
+      { key: 'READY', label: 'Ready for Pickup', icon: FiClock, desc: 'Your bakes are ready! Head over to pick up.' },
+    ];
+    return {
+      steps: isTakeaway ? takeawaySteps : deliverySteps,
+      deliveredBannerTitle: isTakeaway ? 'Fresh Bakes Ready!' : 'Order Delivered!',
+      deliveredBannerSub: 'Enjoy your fresh bakes! Thank you for ordering.',
+      declinedBannerSub: `This order was declined by ${outletName || 'the bakery'}.`,
+      originMapLabel: outletName || 'Bakery',
+      itemsSectionTitle: 'Baked Goods & Treats',
+    };
+  }
+
+  // 4. Salon / Spa / Services
+  if (norm.includes('SALON') || norm.includes('SPA') || norm.includes('BEAUTY')) {
+    const deliverySteps = [
+      { key: 'PLACED', label: 'Order Placed', icon: FiCheck, desc: 'Your order has been received' },
+      { key: 'CONFIRMED', label: 'Order Confirmed', icon: FiPackage, desc: 'Store is processing your order' },
+      { key: 'READY', label: 'Order Ready', icon: FiClock, desc: 'Products packed & ready for dispatch' },
+      { key: 'OUT', label: 'Out for Delivery', icon: FiTruck, desc: 'Delivery partner is on the way' },
+      { key: 'DELIVERED', label: 'Delivered', icon: FiHome, desc: 'Products delivered! Thank you.' },
+    ];
+    const takeawaySteps = [
+      { key: 'PLACED', label: 'Order Placed', icon: FiCheck, desc: 'Your order has been received' },
+      { key: 'CONFIRMED', label: 'Confirmed', icon: FiPackage, desc: 'Staff is preparing your package' },
+      { key: 'READY', label: 'Ready for Pickup', icon: FiClock, desc: 'Your order is ready! Visit us to collect.' },
+    ];
+    return {
+      steps: isTakeaway ? takeawaySteps : deliverySteps,
+      deliveredBannerTitle: isTakeaway ? 'Order Ready for Pickup!' : 'Order Delivered!',
+      deliveredBannerSub: 'Thank you for choosing us!',
+      declinedBannerSub: `This order was declined by ${outletName || 'the salon'}.`,
+      originMapLabel: outletName || 'Salon & Spa',
+      itemsSectionTitle: 'Order Items',
+    };
+  }
+
+  // 5. General Retail / Others
+  if (norm.includes('OTHER') || norm.includes('RETAIL') || norm.includes('STORE')) {
+    const deliverySteps = [
+      { key: 'PLACED', label: 'Order Placed', icon: FiCheck, desc: 'Your order has been received' },
+      { key: 'CONFIRMED', label: 'Order Confirmed', icon: FiPackage, desc: 'Store is processing & packing your order' },
+      { key: 'READY', label: 'Package Ready', icon: FiClock, desc: 'Order packed & ready for dispatch' },
+      { key: 'OUT', label: 'Out for Delivery', icon: FiTruck, desc: 'Delivery partner is on the way' },
+      { key: 'DELIVERED', label: 'Delivered', icon: FiHome, desc: 'Order delivered! Thank you for ordering.' },
+    ];
+    const takeawaySteps = [
+      { key: 'PLACED', label: 'Order Placed', icon: FiCheck, desc: 'Your order has been received' },
+      { key: 'CONFIRMED', label: 'Confirmed', icon: FiPackage, desc: 'Store is packing your items' },
+      { key: 'READY', label: 'Ready for Pickup', icon: FiClock, desc: 'Your order is ready! Visit us to collect.' },
+    ];
+    return {
+      steps: isTakeaway ? takeawaySteps : deliverySteps,
+      deliveredBannerTitle: isTakeaway ? 'Order Ready for Pickup!' : 'Order Delivered!',
+      deliveredBannerSub: 'Thank you for shopping with us!',
+      declinedBannerSub: `This order was declined by ${outletName || 'the store'}.`,
+      originMapLabel: outletName || 'Store Outlet',
+      itemsSectionTitle: 'Order Items',
+    };
+  }
+
+  // 6. Default: Restaurant / Cafe / QSR / Food Truck / Bar
+  const deliverySteps = [
+    { key: 'PLACED', label: 'Order Placed', icon: FiCheck, desc: 'Your order has been received' },
+    { key: 'CONFIRMED', label: 'Order Confirmed', icon: FiPackage, desc: 'Restaurant is preparing your food' },
+    { key: 'READY', label: 'Food Ready', icon: FiClock, desc: 'Freshly prepared & packed for delivery' },
+    { key: 'OUT', label: 'Out for Delivery', icon: FiTruck, desc: 'Rider is on the way to you' },
+    { key: 'DELIVERED', label: 'Delivered', icon: FiHome, desc: 'Enjoy your meal! Thank you for ordering.' },
+  ];
+  const takeawaySteps = [
+    { key: 'PLACED', label: 'Order Placed', icon: FiCheck, desc: 'Your order has been received' },
+    { key: 'CONFIRMED', label: 'Confirmed', icon: FiPackage, desc: 'Kitchen is preparing your order' },
+    { key: 'READY', label: 'Ready for Pickup', icon: FiClock, desc: 'Your food is ready! Head over to pick up.' },
+  ];
+  return {
+    steps: isTakeaway ? takeawaySteps : deliverySteps,
+    deliveredBannerTitle: isTakeaway ? 'Food Ready for Pickup!' : 'Order Delivered!',
+    deliveredBannerSub: 'Enjoy your meal! Thank you for ordering.',
+    declinedBannerSub: `This order was declined by ${outletName || 'the restaurant'}.`,
+    originMapLabel: outletName || 'Restaurant',
+    itemsSectionTitle: 'Your Order',
+  };
+}
 
 const getStepperStatusIndex = (backendStatus) => {
   switch (String(backendStatus).toUpperCase()) {
@@ -132,6 +268,16 @@ function TrackPageInner() {
     };
   }, [orderId, restaurantId, router]);
 
+  const orderType = order?.type || order?.orderType || 'DELIVERY';
+  const posType = order?.posType || 'Restaurant';
+  const outletName = order?.branchName || '';
+
+  const workflowConfig = getOrderWorkflowConfig(posType, orderType, outletName);
+  const steps = workflowConfig.steps;
+  const stepIdx = getStepperStatusIndex(status);
+  const isDelivered = status === 'DELIVERED' || status === 'COMPLETED' || (orderType === 'TAKEAWAY' && status === 'READY');
+  const isCancelled = status === 'CANCELLED' || status === 'VOID';
+
   // Initialize Route Map
   useEffect(() => {
     if (!mapLoaded || !order || typeof window === 'undefined' || !window.L || orderType !== 'DELIVERY') return;
@@ -169,7 +315,7 @@ function TrackPageInner() {
       shadowSize: [41, 41]
     });
 
-    L.marker([restLat, restLng], { icon: restIcon }).addTo(mapInstance).bindPopup('Restaurant');
+    L.marker([restLat, restLng], { icon: restIcon }).addTo(mapInstance).bindPopup(workflowConfig.originMapLabel);
     L.marker([custLat, custLng], { icon: custIcon }).addTo(mapInstance).bindPopup('Delivery Location');
 
     L.polyline([[restLat, restLng], [custLat, custLng]], {
@@ -185,13 +331,7 @@ function TrackPageInner() {
     return () => {
       mapInstance.remove();
     };
-  }, [mapLoaded, order]);
-
-  const orderType = order?.type || order?.orderType || 'DELIVERY';
-  const steps = orderType === 'TAKEAWAY' ? TAKEAWAY_STEPS : ORDER_STEPS;
-  const stepIdx = getStepperStatusIndex(status);
-  const isDelivered = status === 'DELIVERED' || status === 'COMPLETED' || (orderType === 'TAKEAWAY' && status === 'READY');
-  const isCancelled = status === 'CANCELLED' || status === 'VOID';
+  }, [mapLoaded, order, workflowConfig.originMapLabel, orderType]);
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-stone-50">
@@ -224,8 +364,8 @@ function TrackPageInner() {
       {isDelivered && (
         <div className="bg-green-500 text-white px-4 py-5 text-center">
           <p className="text-2xl mb-1">🎉</p>
-          <p className="font-bold text-lg">{orderType === 'TAKEAWAY' ? 'Order Ready!' : 'Order Delivered!'}</p>
-          <p className="text-sm opacity-80 mt-0.5">Enjoy your meal! Thank you for ordering.</p>
+          <p className="font-bold text-lg">{workflowConfig.deliveredBannerTitle}</p>
+          <p className="text-sm opacity-80 mt-0.5">{workflowConfig.deliveredBannerSub}</p>
         </div>
       )}
 
@@ -238,7 +378,7 @@ function TrackPageInner() {
             <p className="text-2xl mb-1">❌</p>
             <p className="font-bold text-lg">{isDeclined ? 'Order Declined' : 'Order Cancelled'}</p>
             <p className="text-sm opacity-80 mt-0.5">
-              {isDeclined ? 'This order was declined by the restaurant.' : 'This order has been cancelled.'}
+              {isDeclined ? workflowConfig.declinedBannerSub : 'This order has been cancelled.'}
             </p>
           </div>
         );
@@ -298,7 +438,7 @@ function TrackPageInner() {
       {/* Order summary */}
       {order?.items && (
         <div className="bg-white mx-4 mt-3 rounded-2xl p-5">
-          <h2 className="text-sm font-semibold text-stone-600 mb-3">Your Order</h2>
+          <h2 className="text-sm font-semibold text-stone-600 mb-3">{workflowConfig.itemsSectionTitle || 'Your Order'}</h2>
           {order.items.map((item, i) => {
             const displayName = item.productName || item.name || 'Item';
             const displayQty = item.quantity ?? item.qty ?? 1;
