@@ -168,7 +168,8 @@ function OrderPageInner() {
     const matchSearch = !search ||
       (i.name || '').toLowerCase().includes(search.toLowerCase()) ||
       (i.description || '').toLowerCase().includes(search.toLowerCase());
-    const matchVeg = !vegOnly || i.is_veg;
+    const isVeg = i.isVeg ?? i.is_veg ?? (i.productType === 'VEG' || i.productType === 'Vegetarian');
+    const matchVeg = !vegOnly || isVeg;
     return matchSearch && matchVeg;
   });
 

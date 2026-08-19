@@ -3,24 +3,33 @@ import Image from 'next/image';
 import { FiPlus, FiMinus } from 'react-icons/fi';
 
 export default function MenuItemCard({ item, qty, onAdd, onRemove }) {
-  const veg = item.is_veg;
+  const imageUrl = item.imageUrl || item.image_url;
+  const isVeg = item.isVeg ?? item.is_veg ?? (item.productType === 'VEG' || item.productType === 'Vegetarian');
+
   return (
     <div className="flex gap-3 py-4 border-b border-stone-100 last:border-0 animate-fade-in">
       {/* Image */}
-      {item.image_url ? (
-        <div className="w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 relative">
-          <Image
-            src={item.image_url}
+      {imageUrl ? (
+        <div className="w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 relative bg-stone-100">
+          <img
+            src={imageUrl}
             alt={item.name}
-            fill
-            sizes="96px"
-            className="object-cover"
+            className="w-full h-full object-cover rounded-xl"
             loading="lazy"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+              if (e.currentTarget.nextElementSibling) {
+                e.currentTarget.nextElementSibling.style.display = 'flex';
+              }
+            }}
           />
+          <div className="w-full h-full items-center justify-center bg-stone-100 rounded-xl" style={{ display: 'none' }}>
+            <span className="text-3xl">{isVeg ? '🥬' : '🍗'}</span>
+          </div>
         </div>
       ) : (
         <div className="w-24 h-24 rounded-xl bg-stone-100 flex items-center justify-center flex-shrink-0">
-          <span className="text-3xl">{veg ? '🥬' : '🍗'}</span>
+          <span className="text-3xl">{isVeg ? '🥬' : '🍗'}</span>
         </div>
       )}
       {/* Details */}
