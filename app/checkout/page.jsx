@@ -2,16 +2,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { FiArrowLeft, FiMapPin, FiUser, FiPhone, FiCreditCard, FiCheck, FiMail } from 'react-icons/fi';
-import { placeOrder as apiPlaceOrder } from '@/lib/apiClient';
-
-// ── CHANGES FROM PREVIOUS VERSION ────────────────────────────────────────────
-// 1. OTP flow removed from Step 1 entirely (auth now handled at app/page.jsx).
-// 2. On mount, GET /api/auth/session to pre-fill customer email from session.
-//    Email is shown as a read-only verified field — not editable here.
-// 3. validateStep1 no longer checks OTP — only name + phone.
-// 4. Payment step: COD only. UPI and Card options removed.
-// 5. All other logic (cart, address, placeOrder, step indicator) UNCHANGED.
-// ─────────────────────────────────────────────────────────────────────────────
+import { placeOrder as apiPlaceOrder, createDeliveryPaymentOrder } from '@/lib/apiClient';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://cafe-qr-backend.onrender.com/api';
 
@@ -209,10 +200,21 @@ function CheckoutPageInner() {
     };
   }, [mapLoaded, step, orderType, restaurant]);
 
-  // Step 3 — payment (COD only)
+  // Step 3 — payment
   const [payment, setPayment] = useState('COD');
   const [placing, setPlacing] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
   const [errors, setErrors] = useState({});
+
+  // Preload Razorpay checkout script
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !window.Razorpay) {
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, []);
 
   // ── Load cart + restaurant from sessionStorage ──────────────────────────────
   useEffect(() => {
@@ -222,7 +224,13 @@ function CheckoutPageInner() {
     } catch { }
     try {
       const r = sessionStorage.getItem(`restaurant_${restaurantId}`);
-      if (r) setRestaurant(JSON.parse(r));
+      if (r) {
+        const parsed = JSON.parse(r);
+        setRestaurant(parsed);
+        if (parsed?.onlinePaymentEnabled) {
+          setPayment('ONLINE');
+        }
+      }
     } catch { }
   }, [restaurantId]);
 
@@ -318,9 +326,126 @@ function CheckoutPageInner() {
     return Object.keys(e).length === 0;
   };
 
-  // ── Place order ─────────────────────────────────────────────────────────────
+  // ── Online Payment (Razorpay) ──────────────────────────────────────────────
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      if (typeof window === 'undefined') return resolve(false);
+      if (window.Razorpay) return resolve(true);
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  const handleOnlinePayment = async () => {
+    setPlacing(true);
+    setPaymentError('');
+    try {
+      const loaded = await loadRazorpayScript();
+      if (!loaded || !window.Razorpay) {
+        throw new Error('Unable to load payment gateway. Please try Cash on Delivery or reload the page.');
+      }
+
+      const deliveryAddressStr = orderType === 'DELIVERY'
+        ? `${address.line1}, ${address.area}, ${address.city} - ${address.pincode}`
+        : 'Takeaway Pickup';
+
+      // 1. Create Razorpay order on backend using restaurant credentials
+      const res = await createDeliveryPaymentOrder({
+        clientId: restaurantId,
+        orgId: orgId || null,
+        customerEmail: email,
+        customerName: name,
+        customerPhone: phone,
+        fulfillmentType: orderType,
+        items: cart.map(i => ({ productId: i.id, quantity: i.qty }))
+      });
+
+      const orderData = res.data?.data || res.data;
+      if (!orderData?.razorpayOrderId) {
+        throw new Error('Failed to initiate online payment order.');
+      }
+
+      // 2. Launch Razorpay Checkout Modal
+      const options = {
+        key: orderData.keyId,
+        order_id: orderData.razorpayOrderId,
+        amount: orderData.amount,
+        currency: orderData.currency || 'INR',
+        name: restaurant?.restaurantName || restaurant?.name || 'Restaurant Order',
+        description: `${orderType === 'DELIVERY' ? 'Home Delivery' : 'Takeaway'} Order (${cartCount} items)`,
+        prefill: {
+          name: name,
+          email: email,
+          contact: phone ? (phone.startsWith('+91') ? phone : `+91${phone}`) : ''
+        },
+        theme: {
+          color: restaurant?.brandColor || '#f97316'
+        },
+        modal: {
+          ondismiss: () => {
+            setPlacing(false);
+          }
+        },
+        handler: async (response) => {
+          try {
+            const payload = {
+              clientId: restaurantId,
+              orgId: orgId || null,
+              customerEmail: email,
+              customerName: name,
+              customerPhone: phone,
+              fulfillmentType: orderType,
+              deliveryAddress: deliveryAddressStr,
+              note: `Payment: ONLINE (${response.razorpay_payment_id})`,
+              remarks: remarks,
+              paymentMethod: 'ONLINE',
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpaySignature: response.razorpay_signature,
+              items: cart.map(i => ({ productId: i.id, quantity: i.qty })),
+              latitude: orderType === 'DELIVERY' ? latitude : null,
+              longitude: orderType === 'DELIVERY' ? longitude : null,
+            };
+
+            const orderRes = await apiPlaceOrder(payload);
+            const confirmedData = orderRes.data?.data || orderRes.data;
+            const confirmedId = confirmedData.orderId || confirmedData.id;
+
+            try {
+              sessionStorage.removeItem(`cart_${restaurantId}`);
+              sessionStorage.removeItem('delivery_remarks');
+            } catch { }
+
+            router.push(`/track?id=${confirmedId}&r=${restaurantId}${orgId ? `&orgId=${orgId}` : ''}`);
+          } catch (err) {
+            console.error('Failed to confirm paid order:', err);
+            setPaymentError(err.response?.data?.message || err.message || 'Payment was received, but failed to confirm order. Please contact restaurant with payment ID: ' + response.razorpay_payment_id);
+            setPlacing(false);
+          }
+        }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (resp) {
+        setPaymentError(resp.error?.description || 'Payment failed. Please try again or choose Cash on Delivery.');
+        setPlacing(false);
+      });
+      rzp.open();
+    } catch (err) {
+      console.error('Payment initiation error:', err);
+      setPaymentError(err.response?.data?.message || err.message || 'Could not start online payment.');
+      setPlacing(false);
+    }
+  };
+
+  // ── Place COD order ─────────────────────────────────────────────────────────
   const handlePlaceOrder = async () => {
     setPlacing(true);
+    setPaymentError('');
     try {
       const deliveryAddressStr = orderType === 'DELIVERY'
         ? `${address.line1}, ${address.area}, ${address.city} - ${address.pincode}`
@@ -336,6 +461,7 @@ function CheckoutPageInner() {
         deliveryAddress: deliveryAddressStr,
         note: `Payment: ${payment}`,
         remarks: remarks,
+        paymentMethod: 'COD',
         items: cart.map(i => ({ productId: i.id, quantity: i.qty })),
         latitude: orderType === 'DELIVERY' ? latitude : null,
         longitude: orderType === 'DELIVERY' ? longitude : null,
@@ -356,6 +482,8 @@ function CheckoutPageInner() {
         sessionStorage.removeItem('delivery_remarks');
       } catch { }
       router.push(`/track?id=${orderId}&r=${restaurantId}${orgId ? `&orgId=${orgId}` : ''}`);
+    } catch (err) {
+      setPaymentError(err.response?.data?.message || err.message || 'Failed to place order.');
     } finally {
       setPlacing(false);
     }
@@ -654,34 +782,90 @@ function CheckoutPageInner() {
           </div>
         )}
 
-        {/* ── Step 3: Payment (COD only) ───────────────────────────── */}
+        {/* ── Step 3: Payment (Online + COD) ───────────────────────────── */}
         {step === 3 && (
-          <div className="bg-white rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-4">
+          <div className="bg-white rounded-2xl p-5 space-y-4">
+            <div className="flex items-center gap-2 mb-1">
               <FiCreditCard size={18} className="text-brand-orange" />
-              <h2 className="font-semibold text-stone-800">Payment Method</h2>
+              <h2 className="font-semibold text-stone-800">Choose Payment Method</h2>
             </div>
-            {/* COD — only option for now */}
+
+            {/* Error Banner */}
+            {paymentError && (
+              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2 animate-fadeIn">
+                <span className="text-base">⚠️</span>
+                <div className="flex-1">
+                  <p className="font-semibold">Payment Issue</p>
+                  <p className="mt-0.5 leading-relaxed">{paymentError}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Online Payment Option */}
+            {restaurant?.onlinePaymentEnabled && restaurant?.razorpayKeyId ? (
+              <button
+                type="button"
+                onClick={() => { setPayment('ONLINE'); setPaymentError(''); }}
+                className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
+                  payment === 'ONLINE'
+                    ? 'border-brand-orange bg-orange-50/70 shadow-sm'
+                    : 'border-stone-200 hover:border-stone-300 bg-white'
+                }`}
+              >
+                <span className="text-2xl">💳</span>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-stone-900">UPI / Cards / NetBanking</p>
+                    <span className="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Fast & Secure</span>
+                  </div>
+                  <p className="text-xs text-stone-400 mt-0.5">Google Pay, PhonePe, Paytm, Cards, UPI</p>
+                </div>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                  payment === 'ONLINE' ? 'border-brand-orange bg-brand-orange' : 'border-stone-300 bg-white'
+                }`}>
+                  {payment === 'ONLINE' && <div className="w-2 h-2 bg-white rounded-full" />}
+                </div>
+              </button>
+            ) : null}
+
+            {/* Cash on Delivery Option */}
             <button
-              className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-brand-orange bg-orange-50 cursor-default"
+              type="button"
+              onClick={() => { setPayment('COD'); setPaymentError(''); }}
+              className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
+                payment === 'COD'
+                  ? 'border-brand-orange bg-orange-50/70 shadow-sm'
+                  : 'border-stone-200 hover:border-stone-300 bg-white'
+              }`}
             >
               <span className="text-2xl">💵</span>
-              <div className="text-left">
-                <p className="text-sm font-semibold text-orange-700">Cash on Delivery</p>
-                <p className="text-xs text-stone-400">Pay when your order arrives</p>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-stone-900">
+                  {orderType === 'TAKEAWAY' ? 'Pay at Counter' : 'Cash on Delivery (COD)'}
+                </p>
+                <p className="text-xs text-stone-400 mt-0.5">
+                  {orderType === 'TAKEAWAY' ? 'Pay when you collect your order' : 'Pay with cash or UPI when your food arrives'}
+                </p>
               </div>
-              <div className="ml-auto w-5 h-5 rounded-full border-2 border-brand-orange bg-brand-orange flex items-center justify-center">
-                <div className="w-2 h-2 bg-white rounded-full" />
+              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                payment === 'COD' ? 'border-brand-orange bg-brand-orange' : 'border-stone-300 bg-white'
+              }`}>
+                {payment === 'COD' && <div className="w-2 h-2 bg-white rounded-full" />}
               </div>
             </button>
-            <p className="text-xs text-stone-300 text-center mt-3">Online payment coming soon</p>
+
+            {!restaurant?.onlinePaymentEnabled && (
+              <p className="text-xs text-stone-400 text-center pt-1">
+                ℹ️ Online payment is currently not configured for this restaurant.
+              </p>
+            )}
           </div>
         )}
 
       </div>
 
       {/* Bottom CTA */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-100 px-4 py-4">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-100 px-4 py-4 z-20">
         {step < 3 ? (
           <button
             onClick={() => {
@@ -695,14 +879,20 @@ function CheckoutPageInner() {
           </button>
         ) : (
           <button
-            onClick={handlePlaceOrder}
+            onClick={payment === 'ONLINE' ? handleOnlinePayment : handlePlaceOrder}
             disabled={placing}
-            className="w-full bg-brand-orange hover:bg-orange-600 disabled:opacity-70 text-white font-semibold py-4 rounded-xl transition-colors flex items-center justify-center gap-2"
+            className="w-full bg-brand-orange hover:bg-orange-600 disabled:opacity-70 text-white font-semibold py-4 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20"
           >
-            {placing
-              ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Placing Order…</>
-              : `Place Order · ₹${grandTotal.toFixed(2)}`
-            }
+            {placing ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                {payment === 'ONLINE' ? 'Processing Payment…' : 'Placing Order…'}
+              </>
+            ) : payment === 'ONLINE' ? (
+              `Pay Online · ₹${grandTotal.toFixed(2)}`
+            ) : (
+              `Place Order · ₹${grandTotal.toFixed(2)}`
+            )}
           </button>
         )}
       </div>
