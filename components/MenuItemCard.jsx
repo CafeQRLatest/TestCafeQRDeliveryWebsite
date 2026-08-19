@@ -1,5 +1,4 @@
 'use client';
-import Image from 'next/image';
 import { FiPlus, FiMinus } from 'react-icons/fi';
 
 export default function MenuItemCard({ item, qty, onAdd, onRemove }) {
@@ -37,13 +36,13 @@ export default function MenuItemCard({ item, qty, onAdd, onRemove }) {
         {/* Veg/Non-veg dot */}
         <div className="flex items-center gap-1.5 mb-1">
           <div className={`w-3.5 h-3.5 rounded-sm border-2 flex items-center justify-center ${
-            veg ? 'border-green-600' : 'border-red-600'
+            isVeg ? 'border-green-600' : 'border-red-600'
           }`}>
             <div className={`w-1.5 h-1.5 rounded-full ${
-              veg ? 'bg-green-600' : 'bg-red-600'
+              isVeg ? 'bg-green-600' : 'bg-red-600'
             }`} />
           </div>
-          {item.is_bestseller && (
+          {(item.is_bestseller || item.isBestseller) && (
             <span className="text-xs text-amber-600 font-medium">Bestseller</span>
           )}
         </div>
