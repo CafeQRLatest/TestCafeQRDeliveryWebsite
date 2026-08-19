@@ -171,6 +171,7 @@ function OrderPageInner() {
           address: rData.address || '',
           brandColor: rData.brandColor || '#f97316',
           logoUrl: rData.logoUrl || '',
+          bannerUrl: rData.bannerUrl || null,
           rating: rData.rating || 4.5,
           delivery_time: rData.estimatedDeliveryMinutes ? `${rData.estimatedDeliveryMinutes} min` : '40 min',
           min_order: rData.minOrderAmount || 0,
@@ -304,19 +305,34 @@ function OrderPageInner() {
 
       {/* Restaurant / Store Hero */}
       <div className="bg-white">
-        <div className="h-40 bg-gradient-to-br from-orange-400 to-red-500 relative overflow-hidden">
-          <div className="absolute inset-0 flex items-center justify-center opacity-20">
-            <span className="text-8xl">{categoryInfo.heroEmoji}</span>
-          </div>
+        <div className="relative w-full h-44 sm:h-52 md:h-64 overflow-hidden bg-stone-900">
+          {restaurant?.bannerUrl ? (
+            <img
+              src={restaurant.bannerUrl}
+              alt={restaurant.name || 'Hero Banner'}
+              className="w-full h-full object-cover object-center transform transition-transform duration-700 hover:scale-105"
+              loading="eager"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-orange-400 to-red-500 relative flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center justify-center opacity-20">
+                <span className="text-8xl">{categoryInfo.heroEmoji}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Dark gradient overlay to guarantee text and button readability */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent pointer-events-none" />
+
           {/* Back button */}
           <button
             onClick={() => router.back()}
-            className="absolute top-4 left-4 bg-white/20 backdrop-blur text-white p-2 rounded-full"
+            className="absolute top-4 left-4 bg-black/40 backdrop-blur-md text-white p-2.5 rounded-full hover:bg-black/60 transition-all z-10 shadow-sm"
           >
             <FiArrowLeft size={18} />
           </button>
-          <div className="absolute top-4 right-4">
-            <span className="bg-white/20 backdrop-blur text-white text-xs font-medium px-3 py-1.5 rounded-full">
+          <div className="absolute top-4 right-4 z-10">
+            <span className="bg-black/40 backdrop-blur-md text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-sm">
               {orderType === 'DELIVERY' ? '🚴 Delivery' : '🛖 Takeaway'}
             </span>
           </div>
