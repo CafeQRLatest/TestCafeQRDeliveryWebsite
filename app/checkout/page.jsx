@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { FiArrowLeft, FiMapPin, FiUser, FiPhone, FiCreditCard, FiCheck, FiMail } from 'react-icons/fi';
-import { placeOrder as apiPlaceOrder, createDeliveryPaymentOrder } from '@/lib/apiClient';
+import { placeOrder as apiPlaceOrder, createDeliveryPaymentOrder, fetchDeliverySettings } from '@/lib/apiClient';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://cafe-qr-backend.onrender.com/api';
 
@@ -216,23 +216,64 @@ function CheckoutPageInner() {
     }
   }, []);
 
-  // ── Load cart + restaurant from sessionStorage ──────────────────────────────
+  // ── Load cart + restaurant from sessionStorage & API ────────────────────────
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem(`cart_${restaurantId}`);
       if (saved) setCart(JSON.parse(saved));
     } catch { }
+
+    let cached = null;
     try {
       const r = sessionStorage.getItem(`restaurant_${restaurantId}`);
       if (r) {
-        const parsed = JSON.parse(r);
-        setRestaurant(parsed);
-        if (parsed?.onlinePaymentEnabled) {
+        cached = JSON.parse(r);
+        setRestaurant(cached);
+        if (cached?.onlinePaymentEnabled && cached?.razorpayKeyId) {
           setPayment('ONLINE');
         }
       }
     } catch { }
-  }, [restaurantId]);
+
+    if (restaurantId) {
+      fetchDeliverySettings(restaurantId, orgId)
+        .then(res => {
+          const rData = res.data?.data || res.data;
+          if (rData) {
+            const formatted = {
+              ...(cached || {}),
+              name: rData.restaurantName || rData.name || cached?.name || 'Our Restaurant',
+              tagline: rData.tagline || cached?.tagline || 'Delivery & Takeaway',
+              address: rData.address || cached?.address || '',
+              brandColor: rData.brandColor || cached?.brandColor || '#f97316',
+              logoUrl: rData.logoUrl || cached?.logoUrl || '',
+              taxEnabled: rData.taxEnabled || false,
+              taxLabelGlobal: rData.taxLabelGlobal || 'GST',
+              taxRates: rData.taxRates || [],
+              taxDefaultId: rData.taxDefaultId || null,
+              pricesIncludeTax: rData.pricesIncludeTax || false,
+              taxSplitEnabled: rData.taxSplitEnabled || true,
+              currencyDecimalPlaces: rData.currencyDecimalPlaces ?? 2,
+              deliveryRadiusKm: rData.deliveryRadiusKm || null,
+              branchLatitude: rData.branchLatitude || null,
+              branchLongitude: rData.branchLongitude || null,
+              onlinePaymentEnabled: !!rData.onlinePaymentEnabled,
+              razorpayKeyId: rData.razorpayKeyId || null,
+            };
+            setRestaurant(formatted);
+            if (formatted.onlinePaymentEnabled && formatted.razorpayKeyId) {
+              setPayment('ONLINE');
+            }
+            try {
+              sessionStorage.setItem(`restaurant_${restaurantId}`, JSON.stringify(formatted));
+            } catch { }
+          }
+        })
+        .catch(err => {
+          console.warn('Failed to refresh delivery settings in checkout', err);
+        });
+    }
+  }, [restaurantId, orgId]);
 
   // ── Pre-fill email from delivery_session cookie (via /api/auth/session) ─────
   useEffect(() => {

@@ -106,6 +106,9 @@ function OrderPageInner() {
           deliveryRadiusKm: rData.deliveryRadiusKm || null,
           branchLatitude: rData.branchLatitude || null,
           branchLongitude: rData.branchLongitude || null,
+          // Payment settings
+          onlinePaymentEnabled: !!rData.onlinePaymentEnabled,
+          razorpayKeyId: rData.razorpayKeyId || null,
         };
 
         const items = Array.isArray(mData) ? mData : (mData.items || mData.products || []);
