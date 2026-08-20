@@ -5,7 +5,7 @@ import { FiSearch, FiArrowLeft, FiStar, FiClock, FiMapPin, FiShoppingBag } from 
 import MenuItemCard from '@/components/MenuItemCard';
 import CartDrawer from '@/components/CartDrawer';
 import FloatingCartBar from '@/components/FloatingCartBar';
-import { fetchDeliverySettings, fetchMenu } from '@/lib/apiClient';
+import { fetchDeliverySettings, fetchMenu, resolveSlug } from '@/lib/apiClient';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://cafe-qr-backend.onrender.com/api';
 
@@ -111,12 +111,22 @@ function getBusinessCategoryInfo(posType = 'Restaurant') {
   }
 }
 
-function OrderPageInner() {
+function OrderPageInner({ slugHandle, branchHandle }) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const restaurantId = searchParams.get('r');
+  const queryRestaurantId = searchParams.get('r');
   const orderType = searchParams.get('t') || 'DELIVERY';
-  const orgId = searchParams.get('orgId') || searchParams.get('branchId') || '';
+  const queryOrgId = searchParams.get('orgId') || searchParams.get('branchId') || '';
+
+  const targetHandle = slugHandle || queryRestaurantId;
+  const targetBranch = branchHandle || queryOrgId;
+
+  const [resolvedIds, setResolvedIds] = useState({
+    clientId: queryRestaurantId || null,
+    orgId: queryOrgId || '',
+    clientSlug: slugHandle || null,
+    branchSlug: branchHandle || null
+  });
 
   const [restaurant, setRestaurant] = useState(null);
   const [menu, setMenu] = useState([]);
@@ -130,10 +140,14 @@ function OrderPageInner() {
   const [error, setError] = useState(null);
   const categoryRefs = useRef({});
 
+  const restaurantId = resolvedIds.clientId || targetHandle;
+  const orgId = resolvedIds.orgId || targetBranch;
+
   const categoryInfo = getBusinessCategoryInfo(restaurant?.posType);
 
   // ── Persist cart to sessionStorage so it survives page refresh ──
   useEffect(() => {
+    if (!restaurantId) return;
     try {
       const saved = sessionStorage.getItem(`cart_${restaurantId}`);
       if (saved) setCart(JSON.parse(saved));
@@ -141,12 +155,13 @@ function OrderPageInner() {
   }, [restaurantId]);
 
   useEffect(() => {
+    if (!restaurantId) return;
     try { sessionStorage.setItem(`cart_${restaurantId}`, JSON.stringify(cart)); } catch { }
   }, [cart, restaurantId]);
 
   // ── Fetch restaurant + menu ──────────────────────────────────────
   useEffect(() => {
-    if (!restaurantId) {
+    if (!targetHandle) {
       router.replace('/');
       return;
     }
@@ -155,10 +170,31 @@ function OrderPageInner() {
 
     const fetchData = async () => {
       try {
+        let activeClientId = targetHandle;
+        let activeOrgId = targetBranch;
+
+        // Resolve slug if handle is not a raw UUID or if custom slug route is used
+        try {
+          const res = await resolveSlug(targetHandle, targetBranch);
+          const rData = res.data?.data || res.data;
+          if (rData?.clientId) {
+            activeClientId = rData.clientId;
+            activeOrgId = rData.orgId || activeOrgId;
+            setResolvedIds({
+              clientId: rData.clientId,
+              orgId: rData.orgId || '',
+              clientSlug: rData.clientSlug,
+              branchSlug: rData.branchSlug
+            });
+          }
+        } catch (slugErr) {
+          console.warn('[CafeQR] Slug resolve skipped or failed, using direct ID', slugErr);
+        }
+
         // Try real backend settings and menu calls via apiClient
         const [rRes, mRes] = await Promise.all([
-          fetchDeliverySettings(restaurantId, orgId),
-          fetchMenu(restaurantId, orgId),
+          fetchDeliverySettings(activeClientId, activeOrgId),
+          fetchMenu(activeClientId, activeOrgId),
         ]);
 
         const rData = rRes.data?.data || rRes.data;
@@ -489,14 +525,14 @@ function OrderPageInner() {
   );
 }
 
-export default function OrderPage() {
+export default function OrderPage({ slugHandle, branchHandle }) {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center">
         <div className="w-10 h-10 border-4 border-brand-orange border-t-transparent rounded-full animate-spin" />
       </div>
     }>
-      <OrderPageInner />
+      <OrderPageInner slugHandle={slugHandle} branchHandle={branchHandle} />
     </Suspense>
   );
 }
