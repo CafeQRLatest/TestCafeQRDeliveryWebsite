@@ -283,6 +283,33 @@ function OrderPageInner({ slugHandle, branchHandle }) {
     return prev.map(i => (i.id === id || i.cartItemId === id) ? { ...i, qty: i.qty - 1 } : i);
   });
 
+  const updateVariantQuantities = (item, quantitiesMap, variantOptions) => {
+    setCart(prev => {
+      const filtered = prev.filter(c => (c.productId || c.id) !== item.id);
+      const newEntries = [];
+      variantOptions.forEach(opt => {
+        const qty = Number(quantitiesMap[opt.id] || 0);
+        if (qty > 0) {
+          const key = `${item.id}_${opt.id}`;
+          newEntries.push({
+            id: key,
+            cartItemId: key,
+            productId: item.id,
+            name: `${item.name} (${opt.name})`,
+            displayName: `${item.name} (${opt.name})`,
+            variantName: opt.name,
+            variantId: opt.id,
+            price: Number(opt.price),
+            qty: qty,
+            taxRate: item.taxRate,
+            isPackagedGood: item.isPackagedGood
+          });
+        }
+      });
+      return [...filtered, ...newEntries];
+    });
+  };
+
   const getQty = (id) => cart.filter(i => (i.productId || i.id) === id || (i.cartItemId || i.id) === id).reduce((sum, i) => sum + i.qty, 0);
 
   const scrollToCategory = (cat) => {
@@ -536,7 +563,8 @@ function OrderPageInner({ slugHandle, branchHandle }) {
         item={selectedVariantItem}
         isOpen={!!selectedVariantItem}
         onClose={() => setSelectedVariantItem(null)}
-        onAddToCart={addItem}
+        cart={cart}
+        onUpdateVariants={updateVariantQuantities}
       />
     </div>
   );
