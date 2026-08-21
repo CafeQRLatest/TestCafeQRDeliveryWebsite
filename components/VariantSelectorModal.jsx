@@ -1,12 +1,11 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { FiX, FiCheck } from 'react-icons/fi';
 
 export default function VariantSelectorModal({ item, isOpen, onClose, onAddToCart }) {
-  if (!isOpen || !item) return null;
-
   // Extract variant options & prices from item payload
   const variantOptions = useMemo(() => {
+    if (!item) return [];
     const pricings = Array.isArray(item.variantPricings) ? item.variantPricings : [];
     const mappings = Array.isArray(item.variantMappings) ? item.variantMappings : [];
 
@@ -44,9 +43,17 @@ export default function VariantSelectorModal({ item, isOpen, onClose, onAddToCar
     return options;
   }, [item]);
 
-  const [selectedOption, setSelectedOption] = useState(() => {
-    return variantOptions.length > 0 ? variantOptions[0] : null;
-  });
+  const [selectedOption, setSelectedOption] = useState(null);
+
+  useEffect(() => {
+    if (variantOptions.length > 0) {
+      setSelectedOption(variantOptions[0]);
+    } else {
+      setSelectedOption(null);
+    }
+  }, [variantOptions]);
+
+  if (!isOpen || !item) return null;
 
   const handleAdd = () => {
     if (!selectedOption) return;
