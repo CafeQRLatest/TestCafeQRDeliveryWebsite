@@ -1,10 +1,12 @@
 'use client';
-import { FiPlus, FiMinus } from 'react-icons/fi';
+import { FiPlus, FiMinus, FiChevronRight } from 'react-icons/fi';
 
-export default function MenuItemCard({ item, qty, onAdd, onRemove, showVegBadge = true, defaultEmoji = null }) {
+export default function MenuItemCard({ item, qty, onAdd, onRemove, onSelectVariant, showVegBadge = true, defaultEmoji = null }) {
   const imageUrl = item.imageUrl || item.image_url;
   const isVeg = item.isVeg ?? item.is_veg ?? (item.productType === 'VEG' || item.productType === 'Vegetarian');
   const fallbackIcon = defaultEmoji || (isVeg ? '🥬' : '🍗');
+
+  const hasVariants = item.hasVariants || item.has_variants || (Array.isArray(item.variantMappings) && item.variantMappings.length > 0);
 
   return (
     <div className="flex gap-3 py-4 border-b border-stone-100 last:border-0 animate-fade-in">
@@ -48,14 +50,26 @@ export default function MenuItemCard({ item, qty, onAdd, onRemove, showVegBadge 
           {(item.is_bestseller || item.isBestseller) && (
             <span className="text-xs text-amber-600 font-medium">Bestseller</span>
           )}
+          {hasVariants && (
+            <span className="text-[10px] bg-stone-100 text-stone-500 font-semibold px-1.5 py-0.5 rounded">Customisable</span>
+          )}
         </div>
         <h3 className="text-sm font-semibold text-stone-800 line-clamp-2">{item.name}</h3>
         {item.description && (
           <p className="text-xs text-stone-400 mt-0.5 line-clamp-2">{item.description}</p>
         )}
         <div className="flex items-center justify-between mt-2">
-          <p className="font-bold text-stone-800 text-sm">₹{Number(item.price).toFixed(2)}</p>
-          {qty > 0 ? (
+          <p className="font-bold text-stone-800 text-sm">
+            ₹{Number(item.price).toFixed(2)}{hasVariants ? '+' : ''}
+          </p>
+          {hasVariants ? (
+            <button
+              onClick={() => onSelectVariant ? onSelectVariant(item) : onAdd(item)}
+              className="flex items-center gap-1 bg-brand-orange-50 border border-brand-orange text-brand-orange text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-brand-orange hover:text-white transition-colors"
+            >
+              Options <FiChevronRight size={12} />
+            </button>
+          ) : qty > 0 ? (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => onRemove(item.id)}

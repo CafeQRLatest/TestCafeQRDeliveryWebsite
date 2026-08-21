@@ -5,6 +5,7 @@ import { FiSearch, FiArrowLeft, FiStar, FiClock, FiMapPin, FiShoppingBag } from 
 import MenuItemCard from '@/components/MenuItemCard';
 import CartDrawer from '@/components/CartDrawer';
 import FloatingCartBar from '@/components/FloatingCartBar';
+import VariantSelectorModal from '@/components/VariantSelectorModal';
 import { fetchDeliverySettings, fetchMenu, resolveSlug } from '@/lib/apiClient';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://cafe-qr-backend.onrender.com/api';
@@ -134,6 +135,7 @@ function OrderPageInner({ slugHandle, branchHandle }) {
   const [activeCategory, setActiveCategory] = useState(null);
   const [cart, setCart] = useState([]);  // [{ id, name, price, qty }]
   const [cartOpen, setCartOpen] = useState(false);
+  const [selectedVariantItem, setSelectedVariantItem] = useState(null);
   const [search, setSearch] = useState('');
   const [vegOnly, setVegOnly] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -258,11 +260,16 @@ function OrderPageInner({ slugHandle, branchHandle }) {
 
   // ── Cart helpers ─────────────────────────────────────────────────
   const addItem = (item) => setCart(prev => {
-    const existing = prev.find(i => i.id === item.id);
-    if (existing) return prev.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i);
+    const key = item.cartItemId || item.id;
+    const existing = prev.find(i => (i.cartItemId || i.id) === key);
+    if (existing) return prev.map(i => (i.cartItemId || i.id) === key ? { ...i, qty: i.qty + 1 } : i);
     return [...prev, {
-      id: item.id,
-      name: item.name,
+      id: key,
+      cartItemId: key,
+      productId: item.productId || item.id,
+      name: item.displayName || item.name,
+      variantName: item.variantName || null,
+      variantId: item.variantId || null,
       price: Number(item.price),
       qty: 1,
       taxRate: item.taxRate,
@@ -271,12 +278,12 @@ function OrderPageInner({ slugHandle, branchHandle }) {
   });
 
   const removeItem = (id) => setCart(prev => {
-    const existing = prev.find(i => i.id === id);
-    if (!existing || existing.qty === 1) return prev.filter(i => i.id !== id);
-    return prev.map(i => i.id === id ? { ...i, qty: i.qty - 1 } : i);
+    const existing = prev.find(i => i.id === id || i.cartItemId === id);
+    if (!existing || existing.qty === 1) return prev.filter(i => i.id !== id && i.cartItemId !== id);
+    return prev.map(i => (i.id === id || i.cartItemId === id) ? { ...i, qty: i.qty - 1 } : i);
   });
 
-  const getQty = (id) => cart.find(i => i.id === id)?.qty || 0;
+  const getQty = (id) => cart.filter(i => (i.productId || i.id) === id || (i.cartItemId || i.id) === id).reduce((sum, i) => sum + i.qty, 0);
 
   const scrollToCategory = (cat) => {
     setActiveCategory(cat);
@@ -467,6 +474,7 @@ function OrderPageInner({ slugHandle, branchHandle }) {
                 qty={getQty(item.id)}
                 onAdd={addItem}
                 onRemove={removeItem}
+                onSelectVariant={setSelectedVariantItem}
                 showVegBadge={categoryInfo.showVegBadge}
                 defaultEmoji={categoryInfo.placeholderEmoji}
               />
@@ -493,6 +501,7 @@ function OrderPageInner({ slugHandle, branchHandle }) {
                       qty={getQty(item.id)}
                       onAdd={addItem}
                       onRemove={removeItem}
+                      onSelectVariant={setSelectedVariantItem}
                       showVegBadge={categoryInfo.showVegBadge}
                       defaultEmoji={categoryInfo.placeholderEmoji}
                     />
@@ -520,6 +529,14 @@ function OrderPageInner({ slugHandle, branchHandle }) {
           try { sessionStorage.setItem(`cart_${restaurantId}`, JSON.stringify(cart)); } catch { }
           router.push(`/checkout?r=${restaurantId}&t=${orderType}${orgId ? `&orgId=${orgId}` : ''}`);
         }}
+      />
+
+      {/* Variant Selector Modal */}
+      <VariantSelectorModal
+        item={selectedVariantItem}
+        isOpen={!!selectedVariantItem}
+        onClose={() => setSelectedVariantItem(null)}
+        onAddToCart={addItem}
       />
     </div>
   );

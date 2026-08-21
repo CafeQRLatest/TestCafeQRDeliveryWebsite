@@ -19,7 +19,7 @@ import { FiMail, FiCheck, FiArrowRight } from 'react-icons/fi';
 
 function HomeInner() {
   const searchParams = useSearchParams();
-  const router       = useRouter();
+  const router = useRouter();
   const r = searchParams.get('r');
   const t = searchParams.get('t') || 'DELIVERY';
   const orgId = searchParams.get('orgId') || searchParams.get('branchId') || '';
@@ -44,12 +44,12 @@ function HomeInner() {
   }, [r, t, orgId, router]);
 
   // ── OTP state ──────────────────────────────────────────────────────────────
-  const [email,       setEmail]       = useState('');
-  const [otpSent,     setOtpSent]     = useState(false);
-  const [otp,         setOtp]         = useState('');
+  const [email, setEmail] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState('');
   const [otpVerified, setOtpVerified] = useState(false);
-  const [loading,     setLoading]     = useState(false);
-  const [error,       setError]       = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
 
   // Countdown timer for resend button
@@ -126,10 +126,10 @@ function HomeInner() {
       <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6 text-center">
         <div className="mb-6">
           <svg width="56" height="56" viewBox="0 0 56 56" fill="none" aria-label="CafeQR Delivery">
-            <rect width="56" height="56" rx="16" fill="#EA580C"/>
-            <path d="M14 20h28M14 28h20M14 36h24" stroke="white" strokeWidth="3" strokeLinecap="round"/>
-            <circle cx="42" cy="34" r="8" fill="white"/>
-            <path d="M39 34l2 2 4-4" stroke="#EA580C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <rect width="56" height="56" rx="16" fill="#EA580C" />
+            <path d="M14 20h28M14 28h20M14 36h24" stroke="white" strokeWidth="3" strokeLinecap="round" />
+            <circle cx="42" cy="34" r="8" fill="white" />
+            <path d="M39 34l2 2 4-4" stroke="#EA580C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
         <h1 className="text-2xl font-bold text-stone-900">CafeQR Delivery</h1>
@@ -158,9 +158,9 @@ function HomeInner() {
         <div className="flex flex-col items-center mb-8">
           <div className="w-14 h-14 bg-brand-orange rounded-2xl flex items-center justify-center mb-4 shadow-md">
             <svg width="32" height="32" viewBox="0 0 56 56" fill="none" aria-hidden>
-              <path d="M14 20h28M14 28h20M14 36h24" stroke="white" strokeWidth="3" strokeLinecap="round"/>
-              <circle cx="42" cy="34" r="8" fill="white"/>
-              <path d="M39 34l2 2 4-4" stroke="#EA580C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M14 20h28M14 28h20M14 36h24" stroke="white" strokeWidth="3" strokeLinecap="round" />
+              <circle cx="42" cy="34" r="8" fill="white" />
+              <path d="M39 34l2 2 4-4" stroke="#EA580C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-stone-900">Sign in to order</h1>

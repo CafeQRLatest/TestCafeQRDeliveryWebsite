@@ -402,7 +402,14 @@ function CheckoutPageInner() {
         customerName: name,
         customerPhone: phone,
         fulfillmentType: orderType,
-        items: cart.map(i => ({ productId: i.id, quantity: i.qty }))
+        items: cart.map(i => ({
+          productId: i.productId || i.id,
+          variantId: i.variantId || null,
+          variantName: i.variantName || null,
+          variantPrice: i.price,
+          price: i.price,
+          quantity: i.qty
+        }))
       });
 
       const orderData = res.data?.data || res.data;
@@ -447,7 +454,14 @@ function CheckoutPageInner() {
               razorpayPaymentId: response.razorpay_payment_id,
               razorpayOrderId: response.razorpay_order_id,
               razorpaySignature: response.razorpay_signature,
-              items: cart.map(i => ({ productId: i.id, quantity: i.qty })),
+              items: cart.map(i => ({
+          productId: i.productId || i.id,
+          variantId: i.variantId || null,
+          variantName: i.variantName || null,
+          variantPrice: i.price,
+          price: i.price,
+          quantity: i.qty
+        })),
               latitude: orderType === 'DELIVERY' ? latitude : null,
               longitude: orderType === 'DELIVERY' ? longitude : null,
             };
@@ -503,7 +517,14 @@ function CheckoutPageInner() {
         note: `Payment: ${payment}`,
         remarks: remarks,
         paymentMethod: 'COD',
-        items: cart.map(i => ({ productId: i.id, quantity: i.qty })),
+        items: cart.map(i => ({
+          productId: i.productId || i.id,
+          variantId: i.variantId || null,
+          variantName: i.variantName || null,
+          variantPrice: i.price,
+          price: i.price,
+          quantity: i.qty
+        })),
         latitude: orderType === 'DELIVERY' ? latitude : null,
         longitude: orderType === 'DELIVERY' ? longitude : null,
       };
