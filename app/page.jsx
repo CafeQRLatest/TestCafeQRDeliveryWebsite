@@ -20,7 +20,7 @@ import { FiMail, FiCheck, FiArrowRight } from 'react-icons/fi';
 function HomeInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const r = searchParams.get('r');
+  const r = searchParams.get('r') || '48278854-f080-4681-b6e7-54cebd11b7f7';
   const t = searchParams.get('t') || 'DELIVERY';
   const orgId = searchParams.get('orgId') || searchParams.get('branchId') || '';
 
@@ -30,17 +30,18 @@ function HomeInner() {
   const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
-    if (!r) { setSessionChecked(true); return; }
     fetch('/api/auth/session')
       .then(res => {
         if (res.ok) {
           // Already logged in — go straight to menu
           router.replace(`/order?r=${r}&t=${t}${orgId ? `&orgId=${orgId}` : ''}`);
         } else {
-          setSessionChecked(true);
+          router.replace(`/order?r=${r}&t=${t}${orgId ? `&orgId=${orgId}` : ''}`);
         }
       })
-      .catch(() => setSessionChecked(true));
+      .catch(() => {
+        router.replace(`/order?r=${r}&t=${t}${orgId ? `&orgId=${orgId}` : ''}`);
+      });
   }, [r, t, orgId, router]);
 
   // ── OTP state ──────────────────────────────────────────────────────────────

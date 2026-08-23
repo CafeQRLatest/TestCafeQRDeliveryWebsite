@@ -83,28 +83,13 @@ export default function CartDrawer({ open, onClose, cart, onAdd, onRemove, onChe
         {/* Footer */}
         {cart.length > 0 && (
           <div className="px-5 py-4 border-t border-stone-100 bg-white space-y-3">
-            <div>
-              <label className="text-xs font-semibold text-stone-600 flex items-center gap-1 mb-1">
-                <span>📝</span>  Instructions / Remarks <span className="text-stone-400 font-normal">(optional)</span>
-              </label>
-              <input
-                type="text"
-                placeholder="E.g., Leave at door, call on arrival, special instructions..."
-                value={remarks}
-                onChange={(e) => {
-                  setRemarks(e.target.value);
-                  try { sessionStorage.setItem('delivery_remarks', e.target.value); } catch { }
-                }}
-                className="w-full text-xs px-3.5 py-2.5 border border-stone-200 rounded-xl outline-none focus:border-brand-orange bg-stone-50"
-              />
-            </div>
             <div className="flex justify-between items-center">
-              <span className="text-stone-500 text-sm">Subtotal</span>
-              <span className="font-bold text-stone-800">₹{total.toFixed(2)}</span>
+              <span className="text-stone-500 text-sm font-semibold">Subtotal</span>
+              <span className="font-bold text-stone-900 text-base">₹{total.toFixed(2)}</span>
             </div>
             <button
               onClick={onCheckout}
-              className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white font-semibold py-3.5 rounded-xl transition-colors text-sm"
+              className="w-full bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:from-[#ea580c] hover:to-[#c2410c] text-white font-black py-3.5 rounded-2xl transition-all text-sm uppercase tracking-wider shadow-lg shadow-orange-500/25 transform hover:scale-[1.01] active:scale-[0.99]"
             >
               Proceed to Checkout
             </button>

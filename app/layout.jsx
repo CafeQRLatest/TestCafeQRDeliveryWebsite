@@ -8,12 +8,12 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" className="overflow-x-hidden w-full max-w-full">
       <head>
         <meta name="theme-color" content="#F97316" />
         <link rel="icon" href="/favicon.ico" />
       </head>
-      <body className="min-h-screen bg-stone-50">{children}</body>
+      <body className="min-h-screen bg-stone-50 overflow-x-hidden w-full max-w-full">{children}</body>
     </html>
   );
 }

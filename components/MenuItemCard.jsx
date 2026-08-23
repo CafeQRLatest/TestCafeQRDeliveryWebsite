@@ -1,97 +1,152 @@
 'use client';
-import { FiPlus, FiMinus, FiChevronRight } from 'react-icons/fi';
+import { FiPlus, FiMinus, FiStar, FiZap } from 'react-icons/fi';
 
-export default function MenuItemCard({ item, qty, onAdd, onRemove, onSelectVariant, showVegBadge = true, defaultEmoji = null }) {
+export default function MenuItemCard({ item, qty, onAdd, onRemove, onSelectVariant, showVegBadge = true, defaultEmoji = '🍔' }) {
   const imageUrl = item.imageUrl || item.image_url;
   const isVeg = item.isVeg ?? item.is_veg ?? (item.productType === 'VEG' || item.productType === 'Vegetarian');
-  const fallbackIcon = defaultEmoji || (isVeg ? '🥬' : '🍗');
-
   const hasVariants = item.hasVariants || item.has_variants || (Array.isArray(item.variantMappings) && item.variantMappings.length > 0);
+  const isBestseller = item.is_bestseller || item.isBestseller;
+
+  const handleCardClick = () => {
+    if (hasVariants) {
+      if (onSelectVariant) onSelectVariant(item);
+      else onAdd(item);
+    } else {
+      onAdd(item);
+    }
+  };
 
   return (
-    <div className="flex gap-3 py-4 border-b border-stone-100 last:border-0 animate-fade-in">
-      {/* Image */}
+    <div
+      onClick={handleCardClick}
+      className="group relative bg-white rounded-2xl border border-stone-200/90 hover:border-orange-400 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden cursor-pointer select-none"
+    >
+      {/* ── CARD TOP: IMAGE BANNER (ONLY RENDER IF IMAGE URL IS PRESENT) ── */}
       {imageUrl ? (
-        <div className="w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 relative bg-stone-100">
+        <div className="relative w-full h-24 sm:h-28 bg-stone-100 overflow-hidden shrink-0">
           <img
             src={imageUrl}
             alt={item.name}
-            className="w-full h-full object-cover rounded-xl"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
             loading="lazy"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-              if (e.currentTarget.nextElementSibling) {
-                e.currentTarget.nextElementSibling.style.display = 'flex';
-              }
-            }}
           />
-          <div className="w-full h-full items-center justify-center bg-stone-100 rounded-xl" style={{ display: 'none' }}>
-            <span className="text-3xl">{fallbackIcon}</span>
+
+          {/* Top Floating Badges Overlay */}
+          <div className="absolute top-1.5 left-1.5 z-10 flex items-center gap-1">
+            {showVegBadge && (
+              <div className="bg-white/95 backdrop-blur-md border border-stone-200/80 px-1.5 py-0.5 rounded-full shadow-xs flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${isVeg ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                <span className={`text-[8px] font-black uppercase tracking-wider ${isVeg ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  {isVeg ? 'VEG' : 'NON-VEG'}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1">
+            {isBestseller && (
+              <div className="bg-amber-400 text-stone-950 text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs flex items-center gap-0.5 border border-amber-300">
+                <FiStar size={8} className="fill-current" />
+                <span>BEST</span>
+              </div>
+            )}
+
+            {hasVariants && !isBestseller && (
+              <div className="bg-purple-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs flex items-center gap-0.5 border border-purple-400">
+                <FiZap size={8} />
+                <span>CUSTOM</span>
+              </div>
+            )}
           </div>
         </div>
       ) : (
-        <div className="w-24 h-24 rounded-xl bg-stone-100 flex items-center justify-center flex-shrink-0">
-          <span className="text-3xl">{fallbackIcon}</span>
+        /* Top Badges Row when NO Image */
+        <div className="flex items-center justify-between px-2.5 pt-2.5 pb-0.5">
+          {showVegBadge && (
+            <div className="bg-stone-50 border border-stone-200 px-1.5 py-0.5 rounded-full flex items-center gap-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${isVeg ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+              <span className={`text-[8px] font-black uppercase tracking-wider ${isVeg ? 'text-emerald-700' : 'text-rose-700'}`}>
+                {isVeg ? 'VEG' : 'NON-VEG'}
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-1 ml-auto">
+            {isBestseller && (
+              <div className="bg-amber-50 text-amber-900 text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-0.5 border border-amber-300">
+                <FiStar size={8} className="fill-current text-amber-600" />
+                <span>BEST</span>
+              </div>
+            )}
+
+            {hasVariants && !isBestseller && (
+              <div className="bg-purple-50 text-purple-800 text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-0.5 border border-purple-200">
+                <FiZap size={8} />
+                <span>CUSTOM</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
-      {/* Details */}
-      <div className="flex-1 min-w-0">
-        {/* Veg/Non-veg dot & Badges */}
-        <div className="flex items-center gap-1.5 mb-1">
-          {showVegBadge && (
-            <div className={`w-3.5 h-3.5 rounded-sm border-2 flex items-center justify-center ${
-              isVeg ? 'border-green-600' : 'border-red-600'
-            }`}>
-              <div className={`w-1.5 h-1.5 rounded-full ${
-                isVeg ? 'bg-green-600' : 'bg-red-600'
-              }`} />
-            </div>
-          )}
-          {(item.is_bestseller || item.isBestseller) && (
-            <span className="text-xs text-amber-600 font-medium">Bestseller</span>
-          )}
-          {hasVariants && (
-            <span className="text-[10px] bg-stone-100 text-stone-500 font-semibold px-1.5 py-0.5 rounded">Customisable</span>
-          )}
+
+      {/* ── CARD MIDDLE: TITLE & DESCRIPTION ── */}
+      <div className={`p-2.5 sm:p-3 flex-1 flex flex-col justify-between ${!imageUrl ? 'pt-0.5' : ''}`}>
+        <div>
+          <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 group-hover:text-[#ea580c] transition-colors leading-snug line-clamp-1">
+            {item.name}
+          </h3>
+
+          {item.description ? (
+            <p className="text-[10px] sm:text-xs text-stone-500 mt-0.5 line-clamp-1 font-medium leading-normal">
+              {item.description}
+            </p>
+          ) : null}
         </div>
-        <h3 className="text-sm font-semibold text-stone-800 line-clamp-2">{item.name}</h3>
-        {item.description && (
-          <p className="text-xs text-stone-400 mt-0.5 line-clamp-2">{item.description}</p>
-        )}
-        <div className="flex items-center justify-between mt-2">
-          <p className="font-bold text-stone-800 text-sm">
-            ₹{Number(item.price).toFixed(2)}{hasVariants ? '+' : ''}
-          </p>
-          {hasVariants ? (
-            <button
-              onClick={() => onSelectVariant ? onSelectVariant(item) : onAdd(item)}
-              className="flex items-center gap-1 bg-brand-orange-50 border border-brand-orange text-brand-orange text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-brand-orange hover:text-white transition-colors"
+
+        {/* ── CARD BOTTOM: PRICE & QTY ACTION PILL (NO ADD BUTTON) ── */}
+        <div className="flex items-center justify-between gap-1.5 mt-2 pt-2 border-t border-stone-100">
+          <div>
+            <span className="text-xs sm:text-sm font-black text-[#ea580c] tracking-tight">
+              ₹{Number(item.price).toFixed(2)}
+            </span>
+            {hasVariants && (
+              <span className="text-[9px] text-stone-400 font-bold ml-1 uppercase inline-block">
+                + options
+              </span>
+            )}
+          </div>
+
+          {qty > 0 && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#f97316] text-white px-2 py-0.5 rounded-lg shadow-sm flex items-center gap-1.5 animate-in zoom-in-95 duration-150 shrink-0"
             >
-              Options <FiChevronRight size={12} />
-            </button>
-          ) : qty > 0 ? (
-            <div className="flex items-center gap-2">
               <button
-                onClick={() => onRemove(item.id)}
-                className="w-7 h-7 rounded-lg border border-brand-orange text-brand-orange flex items-center justify-center hover:bg-brand-orange hover:text-white transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemove(item.id);
+                }}
+                className="w-4 h-4 rounded bg-white/20 hover:bg-white/40 text-white flex items-center justify-center transition-colors text-[10px] font-black"
+                aria-label="Decrease quantity"
               >
-                <FiMinus size={12} />
+                <FiMinus size={9} />
               </button>
-              <span className="w-5 text-center text-sm font-bold text-brand-orange">{qty}</span>
+              <span className="text-[11px] font-black min-w-[10px] text-center">{qty}</span>
               <button
-                onClick={() => onAdd(item)}
-                className="w-7 h-7 rounded-lg bg-brand-orange text-white flex items-center justify-center hover:bg-brand-orange-dark transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (hasVariants && onSelectVariant) {
+                    onSelectVariant(item);
+                  } else {
+                    onAdd(item);
+                  }
+                }}
+                className="w-4 h-4 rounded bg-white/20 hover:bg-white/40 text-white flex items-center justify-center transition-colors text-[10px] font-black"
+                aria-label="Increase quantity"
               >
-                <FiPlus size={12} />
+                <FiPlus size={9} />
               </button>
             </div>
-          ) : (
-            <button
-              onClick={() => onAdd(item)}
-              className="flex items-center gap-1 bg-brand-orange-50 border border-brand-orange text-brand-orange text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-brand-orange hover:text-white transition-colors"
-            >
-              <FiPlus size={11} /> ADD
-            </button>
           )}
         </div>
       </div>

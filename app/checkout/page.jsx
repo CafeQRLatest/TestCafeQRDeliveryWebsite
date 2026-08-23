@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { FiArrowLeft, FiMapPin, FiUser, FiPhone, FiCreditCard, FiCheck, FiMail } from 'react-icons/fi';
+import { FiArrowLeft, FiMapPin, FiUser, FiPhone, FiCreditCard, FiCheck, FiMail, FiPlus, FiMinus, FiTrash2 } from 'react-icons/fi';
 import { placeOrder as apiPlaceOrder, createDeliveryPaymentOrder, fetchDeliverySettings } from '@/lib/apiClient';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://cafe-qr-backend.onrender.com/api';
@@ -26,8 +26,8 @@ function CheckoutPageInner() {
 
   // Step 2 — address
   const [address, setAddress] = useState({ line1: '', area: '', city: '', pincode: '' });
-  const [latitude, setLatitude] = useState(10.528392);
-  const [longitude, setLongitude] = useState(76.213928);
+  const [latitude, setLatitude] = useState(11.258753);
+  const [longitude, setLongitude] = useState(75.780410);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [remarks, setRemarks] = useState('');
 
@@ -69,10 +69,13 @@ function CheckoutPageInner() {
 
   // Initialize Map
   useEffect(() => {
-    if (!mapLoaded || step !== 2 || orderType === 'TAKEAWAY') return;
+    if (!mapLoaded || step !== 1 || orderType === 'TAKEAWAY') return;
 
     const L = window.L;
     if (!L) return;
+
+    const defaultLat = restaurant?.branchLatitude ? Number(restaurant.branchLatitude) : 11.258753;
+    const defaultLng = restaurant?.branchLongitude ? Number(restaurant.branchLongitude) : 75.780410;
 
     // Detect browser coordinates first
     if (navigator.geolocation) {
@@ -85,11 +88,15 @@ function CheckoutPageInner() {
           initMap(lat, lng);
         },
         () => {
-          initMap(10.528392, 76.213928);
+          setLatitude(defaultLat);
+          setLongitude(defaultLng);
+          initMap(defaultLat, defaultLng);
         }
       );
     } else {
-      initMap(10.528392, 76.213928);
+      setLatitude(defaultLat);
+      setLongitude(defaultLng);
+      initMap(defaultLat, defaultLng);
     }
 
     let mapInstance = null;
@@ -108,6 +115,10 @@ function CheckoutPageInner() {
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors'
       }).addTo(mapInstance);
+
+      setTimeout(() => {
+        try { mapInstance.invalidateSize(); } catch (e) {}
+      }, 300);
 
       const redIcon = L.icon({
         iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
@@ -219,10 +230,25 @@ function CheckoutPageInner() {
   // ── Load cart + restaurant from sessionStorage & API ────────────────────────
   useEffect(() => {
     try {
-      const saved = sessionStorage.getItem(`cart_${restaurantId}`);
+      const saved = localStorage.getItem(`cart_${restaurantId}`) || sessionStorage.getItem(`cart_${restaurantId}`);
       if (saved) setCart(JSON.parse(saved));
     } catch { }
+  }, [restaurantId]);
 
+  useEffect(() => {
+    if (!restaurantId || typeof window === 'undefined') return;
+    try {
+      if (cart.length > 0) {
+        localStorage.setItem(`cart_${restaurantId}`, JSON.stringify(cart));
+        sessionStorage.setItem(`cart_${restaurantId}`, JSON.stringify(cart));
+      } else {
+        localStorage.removeItem(`cart_${restaurantId}`);
+        sessionStorage.removeItem(`cart_${restaurantId}`);
+      }
+    } catch { }
+  }, [cart, restaurantId]);
+
+  useEffect(() => {
     let cached = null;
     try {
       const r = sessionStorage.getItem(`restaurant_${restaurantId}`);
@@ -261,6 +287,10 @@ function CheckoutPageInner() {
               razorpayKeyId: rData.razorpayKeyId || null,
             };
             setRestaurant(formatted);
+            if (formatted.branchLatitude && formatted.branchLongitude) {
+              setLatitude(Number(formatted.branchLatitude));
+              setLongitude(Number(formatted.branchLongitude));
+            }
             if (formatted.onlinePaymentEnabled && formatted.razorpayKeyId) {
               setPayment('ONLINE');
             }
@@ -288,6 +318,49 @@ function CheckoutPageInner() {
       if (saved) setRemarks(saved);
     } catch { }
   }, []);
+
+  // ── Auto-prefill Customer Profile (Name, Phone, Address, Landmark, City, Pincode) ─────
+  useEffect(() => {
+    if (!email || typeof window === 'undefined') return;
+    try {
+      const savedProfile = localStorage.getItem(`profile_${email}`);
+      if (savedProfile) {
+        const p = JSON.parse(savedProfile);
+        if (p.fullName) setName(p.fullName);
+        if (p.phone) setPhone(String(p.phone).replace(/\D/g, '').slice(-10));
+        
+        setAddress(prev => ({
+          line1: p.address || prev.line1 || '',
+          area: p.landmark || prev.area || '',
+          city: p.city || prev.city || 'Kozhikode',
+          pincode: p.pincode || prev.pincode || '673001'
+        }));
+
+        if (p.deliveryNotes && !remarks) setRemarks(p.deliveryNotes);
+      }
+    } catch (e) {
+      console.warn('Failed to load profile in checkout', e);
+    }
+  }, [email]);
+
+  const saveProfileToLocalStorage = () => {
+    if (!email || typeof window === 'undefined') return;
+    try {
+      const existing = localStorage.getItem(`profile_${email}`);
+      const current = existing ? JSON.parse(existing) : {};
+      const updated = {
+        ...current,
+        fullName: name || current.fullName || '',
+        phone: phone || current.phone || '',
+        address: address.line1 || current.address || '',
+        landmark: address.area || current.landmark || '',
+        city: address.city || current.city || '',
+        pincode: address.pincode || current.pincode || '',
+        deliveryNotes: remarks || current.deliveryNotes || ''
+      };
+      localStorage.setItem(`profile_${email}`, JSON.stringify(updated));
+    } catch (e) { }
+  };
 
   // --- GST and Totals Calculations ---
   const gstEnabled = restaurant?.taxEnabled || false;
@@ -340,164 +413,18 @@ function CheckoutPageInner() {
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
   const grandTotal = totalTaxableAmount + totalTaxAmount;
 
-  // ── Validation ──────────────────────────────────────────────────────────────
-  const validateStep1 = () => {
-    const e = {};
-    if (!name.trim()) e.name = 'Name is required';
-    if (!phone.trim() || !/^[6-9]\d{9}$/.test(phone)) e.phone = 'Enter a valid 10-digit mobile number';
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const validateStep2 = () => {
-    if (orderType === 'TAKEAWAY') return true;
-    const e = {};
-    if (!address.line1.trim()) e.line1 = 'House / flat is required';
-    if (!address.area.trim()) e.area = 'Area / locality is required';
-    if (!address.city.trim()) e.city = 'City is required';
-    if (!address.pincode.trim()) e.pincode = 'Pincode is required';
-
-    if (deliveryRadiusEnforced && currentDistanceKm != null) {
-      if (currentDistanceKm > Number(restaurant.deliveryRadiusKm)) {
-        e.distance = `Sorry, your location is ${currentDistanceKm.toFixed(1)} km away. We deliver within ${restaurant.deliveryRadiusKm} km only.`;
-      }
-    }
-
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  // ── Online Payment (Razorpay) ──────────────────────────────────────────────
+  // ── Place Order Handlers ───────────────────────────────────────────────────
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
-      if (typeof window === 'undefined') return resolve(false);
       if (window.Razorpay) return resolve(true);
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.async = true;
       script.onload = () => resolve(true);
       script.onerror = () => resolve(false);
       document.body.appendChild(script);
     });
   };
 
-  const handleOnlinePayment = async () => {
-    setPlacing(true);
-    setPaymentError('');
-    try {
-      const loaded = await loadRazorpayScript();
-      if (!loaded || !window.Razorpay) {
-        throw new Error('Unable to load payment gateway. Please try Cash on Delivery or reload the page.');
-      }
-
-      const deliveryAddressStr = orderType === 'DELIVERY'
-        ? `${address.line1}, ${address.area}, ${address.city} - ${address.pincode}`
-        : 'Takeaway Pickup';
-
-      // 1. Create Razorpay order on backend using restaurant credentials
-      const res = await createDeliveryPaymentOrder({
-        clientId: restaurantId,
-        orgId: orgId || null,
-        customerEmail: email,
-        customerName: name,
-        customerPhone: phone,
-        fulfillmentType: orderType,
-        items: cart.map(i => ({
-          productId: i.productId || i.id,
-          variantId: i.variantId || null,
-          variantName: i.variantName || null,
-          variantPrice: i.price,
-          price: i.price,
-          quantity: i.qty
-        }))
-      });
-
-      const orderData = res.data?.data || res.data;
-      if (!orderData?.razorpayOrderId) {
-        throw new Error('Failed to initiate online payment order.');
-      }
-
-      // 2. Launch Razorpay Checkout Modal
-      const options = {
-        key: orderData.keyId,
-        order_id: orderData.razorpayOrderId,
-        amount: orderData.amount,
-        currency: orderData.currency || 'INR',
-        name: restaurant?.restaurantName || restaurant?.name || 'Restaurant Order',
-        description: `${orderType === 'DELIVERY' ? 'Home Delivery' : 'Takeaway'} Order (${cartCount} items)`,
-        prefill: {
-          name: name,
-          email: email,
-          contact: phone ? (phone.startsWith('+91') ? phone : `+91${phone}`) : ''
-        },
-        theme: {
-          color: restaurant?.brandColor || '#f97316'
-        },
-        modal: {
-          ondismiss: () => {
-            setPlacing(false);
-          }
-        },
-        handler: async (response) => {
-          try {
-            const payload = {
-              clientId: restaurantId,
-              orgId: orgId || null,
-              customerEmail: email,
-              customerName: name,
-              customerPhone: phone,
-              fulfillmentType: orderType,
-              deliveryAddress: deliveryAddressStr,
-              note: `Payment: ONLINE (${response.razorpay_payment_id})`,
-              remarks: remarks,
-              paymentMethod: 'ONLINE',
-              razorpayPaymentId: response.razorpay_payment_id,
-              razorpayOrderId: response.razorpay_order_id,
-              razorpaySignature: response.razorpay_signature,
-              items: cart.map(i => ({
-          productId: i.productId || i.id,
-          variantId: i.variantId || null,
-          variantName: i.variantName || null,
-          variantPrice: i.price,
-          price: i.price,
-          quantity: i.qty
-        })),
-              latitude: orderType === 'DELIVERY' ? latitude : null,
-              longitude: orderType === 'DELIVERY' ? longitude : null,
-            };
-
-            const orderRes = await apiPlaceOrder(payload);
-            const confirmedData = orderRes.data?.data || orderRes.data;
-            const confirmedId = confirmedData.orderId || confirmedData.id;
-
-            try {
-              sessionStorage.removeItem(`cart_${restaurantId}`);
-              sessionStorage.removeItem('delivery_remarks');
-            } catch { }
-
-            router.push(`/track?id=${confirmedId}&r=${restaurantId}${orgId ? `&orgId=${orgId}` : ''}`);
-          } catch (err) {
-            console.error('Failed to confirm paid order:', err);
-            setPaymentError(err.response?.data?.message || err.message || 'Payment was received, but failed to confirm order. Please contact restaurant with payment ID: ' + response.razorpay_payment_id);
-            setPlacing(false);
-          }
-        }
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', function (resp) {
-        setPaymentError(resp.error?.description || 'Payment failed. Please try again or choose Cash on Delivery.');
-        setPlacing(false);
-      });
-      rzp.open();
-    } catch (err) {
-      console.error('Payment initiation error:', err);
-      setPaymentError(err.response?.data?.message || err.message || 'Could not start online payment.');
-      setPlacing(false);
-    }
-  };
-
-  // ── Place COD order ─────────────────────────────────────────────────────────
   const handlePlaceOrder = async () => {
     setPlacing(true);
     setPaymentError('');
@@ -514,17 +441,10 @@ function CheckoutPageInner() {
         customerPhone: phone,
         fulfillmentType: orderType,
         deliveryAddress: deliveryAddressStr,
-        note: `Payment: ${payment}`,
+        note: `Payment: COD`,
         remarks: remarks,
         paymentMethod: 'COD',
-        items: cart.map(i => ({
-          productId: i.productId || i.id,
-          variantId: i.variantId || null,
-          variantName: i.variantName || null,
-          variantPrice: i.price,
-          price: i.price,
-          quantity: i.qty
-        })),
+        items: cart.map(i => ({ productId: i.id, quantity: i.qty })),
         latitude: orderType === 'DELIVERY' ? latitude : null,
         longitude: orderType === 'DELIVERY' ? longitude : null,
       };
@@ -551,13 +471,109 @@ function CheckoutPageInner() {
     }
   };
 
+  const handleOnlinePayment = async () => {
+    setPlacing(true);
+    setPaymentError('');
+    try {
+      const loaded = await loadRazorpayScript();
+      if (!loaded || !window.Razorpay) {
+        throw new Error('Unable to load payment gateway. Please try Cash on Delivery or reload the page.');
+      }
+
+      const deliveryAddressStr = orderType === 'DELIVERY'
+        ? `${address.line1}, ${address.area}, ${address.city} - ${address.pincode}`
+        : 'Takeaway Pickup';
+
+      const res = await createDeliveryPaymentOrder({
+        clientId: restaurantId,
+        orgId: orgId || null,
+        customerEmail: email,
+        customerName: name,
+        customerPhone: phone,
+        fulfillmentType: orderType,
+        items: cart.map(i => ({ productId: i.id, quantity: i.qty }))
+      });
+
+      const orderData = res.data?.data || res.data;
+      if (!orderData?.razorpayOrderId) {
+        throw new Error('Failed to initiate online payment order.');
+      }
+
+      const options = {
+        key: orderData.keyId,
+        order_id: orderData.razorpayOrderId,
+        amount: orderData.amount,
+        currency: orderData.currency || 'INR',
+        name: restaurant?.restaurantName || restaurant?.name || 'Restaurant Order',
+        description: `${orderType === 'DELIVERY' ? 'Home Delivery' : 'Takeaway'} Order (${cartCount} items)`,
+        prefill: {
+          name: name,
+          email: email,
+          contact: phone ? (phone.startsWith('+91') ? phone : `+91${phone}`) : ''
+        },
+        theme: {
+          color: restaurant?.brandColor || '#f97316'
+        },
+        modal: {
+          ondismiss: () => {
+            setPlacing(false);
+          }
+        },
+        handler: async (response) => {
+          let orderId = orderData.orderId || response.razorpay_order_id;
+          try {
+            sessionStorage.removeItem(`cart_${restaurantId}`);
+            sessionStorage.removeItem('delivery_remarks');
+          } catch { }
+          router.push(`/track?id=${orderId}&r=${restaurantId}${orgId ? `&orgId=${orgId}` : ''}`);
+        }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (resp) {
+        setPaymentError(resp.error?.description || 'Online payment failed. Please try again.');
+        setPlacing(false);
+      });
+      rzp.open();
+    } catch (err) {
+      setPaymentError(err.response?.data?.message || err.message || 'Failed to initiate online payment.');
+      setPlacing(false);
+    }
+  };
+
+  // ── Validation ──────────────────────────────────────────────────────────────
+  const validateStep1 = () => {
+    const e = {};
+    if (!name.trim()) e.name = 'Full Name is required';
+    if (!phone.trim() || !/^[6-9]\d{9}$/.test(phone)) e.phone = 'Enter a valid 10-digit mobile number';
+
+    if (orderType !== 'TAKEAWAY') {
+      if (!address.line1.trim()) e.line1 = 'House / flat is required';
+      if (!address.area.trim()) e.area = 'Area / locality is required';
+      if (!address.city.trim()) e.city = 'City is required';
+      if (!address.pincode.trim()) e.pincode = 'Pincode is required';
+
+      if (deliveryRadiusEnforced && currentDistanceKm != null) {
+        if (currentDistanceKm > Number(restaurant.deliveryRadiusKm)) {
+          e.distance = `Sorry, your location is ${currentDistanceKm.toFixed(1)} km away. We deliver within ${restaurant.deliveryRadiusKm} km only.`;
+        }
+      }
+    }
+
+    setErrors(e);
+    if (Object.keys(e).length === 0) {
+      saveProfileToLocalStorage();
+      return true;
+    }
+    return false;
+  };
+
   const STEPS = [
-    { num: 1, label: 'Contact' },
-    { num: 2, label: orderType === 'TAKEAWAY' ? 'Confirm' : 'Address' },
-    { num: 3, label: 'Payment' },
+    { num: 1, label: orderType === 'TAKEAWAY' ? 'Details' : 'Address & Details' },
+    { num: 2, label: 'Payment' },
   ];
 
-  if (cart.length === 0 && step < 3) {
+  if (cart.length === 0 && step < 2) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
         <span className="text-5xl">🛒</span>
@@ -574,8 +590,9 @@ function CheckoutPageInner() {
       <div className="bg-white sticky top-0 z-10 border-b border-stone-100">
         <div className="flex items-center gap-3 px-4 py-4">
           <button
-            onClick={() => step === 1 ? router.back() : setStep(s => s - 1)}
-            className="p-1.5 -ml-1 rounded-lg hover:bg-stone-100 text-stone-500"
+            onClick={() => step === 1 ? router.push('/order?tab=menu') : setStep(s => s - 1)}
+            className="p-1.5 -ml-1 rounded-lg hover:bg-stone-100 text-stone-500 transition-colors"
+            title="Back to products catalog"
           >
             <FiArrowLeft size={20} />
           </button>
@@ -588,7 +605,7 @@ function CheckoutPageInner() {
             <div key={s.num} className="flex items-center flex-1">
               <div className="flex flex-col items-center">
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${step > s.num ? 'bg-green-500 border-green-500 text-white' :
-                  step === s.num ? 'bg-brand-orange border-brand-orange text-white' :
+                  step === s.num ? 'bg-[#ea580c] border-[#ea580c] text-white' :
                     'bg-white border-stone-200 text-stone-400'
                   }`}>
                   {step > s.num ? <FiCheck size={12} /> : s.num}
@@ -597,7 +614,7 @@ function CheckoutPageInner() {
                   }`}>{s.label}</span>
               </div>
               {idx < STEPS.length - 1 && (
-                <div className={`flex-1 h-0.5 mb-3 mx-1 ${step > s.num ? 'bg-brand-orange' : 'bg-stone-200'
+                <div className={`flex-1 h-0.5 mb-3 mx-1 ${step > s.num ? 'bg-[#ea580c]' : 'bg-stone-200'
                   }`} />
               )}
             </div>
@@ -608,122 +625,228 @@ function CheckoutPageInner() {
       <div className="px-4 py-5 space-y-4 pb-36">
 
         {/* Cart summary (always visible) */}
-        <div className="bg-white rounded-2xl p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-stone-500 uppercase tracking-wide">
-              {cartCount} item{cartCount !== 1 ? 's' : ''}
-            </span>
-            <button onClick={() => router.back()} className="text-xs text-brand-orange font-medium">Edit</button>
-          </div>
-          {cart.map(i => (
-            <div key={i.id} className="flex justify-between text-sm py-1">
-              <span className="text-stone-700">{i.name} × {i.qty}</span>
-              <span className="font-medium text-stone-800">₹{(i.price * i.qty).toFixed(0)}</span>
+        <div className="bg-gradient-to-b from-white via-orange-50/20 to-amber-50/10 rounded-3xl border-2 border-orange-200/80 p-5 sm:p-6 shadow-xl shadow-orange-500/5">
+          {/* Header */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-orange-100">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-black text-stone-900 uppercase tracking-tight">
+                Order Summary
+              </h3>
+              <span className="text-[10px] font-black text-[#ea580c] bg-orange-100/80 border border-orange-200 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                {cartCount} {cartCount === 1 ? 'ITEM' : 'ITEMS'}
+              </span>
             </div>
-          ))}
-          <div className="border-t border-stone-100 mt-2 pt-2 space-y-1">
-            <div className="flex justify-between text-sm text-stone-500">
-              <span>Subtotal</span><span>₹{totalTaxableAmount.toFixed(2)}</span>
+
+            <div className="flex items-center gap-2">
+              {/* Empty Cart Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setCart([]);
+                  try {
+                    if (restaurantId) sessionStorage.removeItem(`cart_${restaurantId}`);
+                  } catch (e) { }
+                  router.push('/order');
+                }}
+                className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 hover:border-rose-300 text-[11px] sm:text-xs font-black px-3 py-1.5 rounded-full shadow-2xs transition-all uppercase tracking-wider flex items-center gap-1.5"
+                title="Clear all items from cart"
+              >
+                <FiTrash2 size={12} />
+                <span>EMPTY CART</span>
+              </button>
+
+              {/* Add More Items Button (Beautified Primary Theme Button) */}
+              <button
+                type="button"
+                onClick={() => router.push('/order')}
+                className="bg-[#f97316] hover:bg-[#ea580c] text-white text-[11px] sm:text-xs font-black px-3.5 py-1.5 rounded-full shadow-sm hover:shadow-md transition-all uppercase tracking-wider flex items-center gap-1.5"
+              >
+                <FiPlus size={13} />
+                <span>ADD MORE ITEMS</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Cart Items List */}
+          <div className="space-y-3 max-h-60 overflow-y-auto pr-1 scrollbar-thin">
+            {cart.map((i) => (
+              <div key={i.id} className="flex items-center justify-between gap-3 text-xs border-b border-stone-100/80 pb-2.5 last:border-0 last:pb-0">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="font-extrabold text-stone-800 text-xs sm:text-sm truncate">{i.name}</p>
+                    {i.variantName && (
+                      <span className="text-[10px] font-extrabold text-[#ea580c] bg-orange-100/80 border border-orange-200 px-2 py-0.5 rounded-full">
+                        {i.variantName}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-stone-500 font-semibold mt-0.5">
+                    ₹{Number(i.price).toFixed(2)} each
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1 bg-stone-100 border border-stone-200 rounded-full px-2 py-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = cart.map(item => item.id === i.id ? { ...item, qty: item.qty - 1 } : item).filter(item => item.qty > 0);
+                        setCart(updated);
+                        try {
+                          if (restaurantId) sessionStorage.setItem(`cart_${restaurantId}`, JSON.stringify(updated));
+                        } catch (e) { }
+                        if (updated.length === 0) router.push('/order');
+                      }}
+                      className="w-4 h-4 rounded-full bg-orange-100 text-[#ea580c] hover:bg-[#f97316] hover:text-white flex items-center justify-center transition-colors text-xs font-black"
+                    >
+                      <FiMinus size={10} />
+                    </button>
+                    
+                    <span className="text-xs font-black text-stone-900 min-w-[14px] text-center">{i.qty}</span>
+                    
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = cart.map(item => item.id === i.id ? { ...item, qty: item.qty + 1 } : item);
+                        setCart(updated);
+                        try {
+                          if (restaurantId) sessionStorage.setItem(`cart_${restaurantId}`, JSON.stringify(updated));
+                        } catch (e) { }
+                      }}
+                      className="w-4 h-4 rounded-full bg-orange-100 text-[#ea580c] hover:bg-[#f97316] hover:text-white flex items-center justify-center transition-colors text-xs font-black"
+                    >
+                      <FiPlus size={10} />
+                    </button>
+                  </div>
+
+                  <span className="text-xs sm:text-sm font-black text-stone-900 min-w-[60px] text-right">
+                    ₹{(i.price * i.qty).toFixed(2)}
+                  </span>
+
+                  {/* Product Line Delete Button (Icon Only) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = cart.filter(item => item.id !== i.id);
+                      setCart(updated);
+                      try {
+                        if (restaurantId) sessionStorage.setItem(`cart_${restaurantId}`, JSON.stringify(updated));
+                      } catch (e) { }
+                      if (updated.length === 0) router.push('/order');
+                    }}
+                    className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white hover:bg-rose-50 text-stone-400 hover:text-rose-600 border border-stone-200/80 hover:border-rose-200 flex items-center justify-center transition-all shadow-2xs shrink-0"
+                    title="Delete item"
+                  >
+                    <FiTrash2 size={12} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Bill Breakdown & Grand Total */}
+          <div className="border-t border-orange-100 mt-4 pt-3 space-y-2">
+            <div className="flex justify-between text-xs font-semibold text-stone-500">
+              <span>Subtotal</span>
+              <span className="font-bold text-stone-800">₹{totalTaxableAmount.toFixed(2)}</span>
             </div>
             {gstEnabled && totalTaxAmount > 0 && (
-              <div className="flex justify-between text-sm text-stone-500">
-                <span>{restaurant?.taxLabelGlobal || 'GST'}</span><span>₹{totalTaxAmount.toFixed(2)}</span>
+              <div className="flex justify-between text-xs font-semibold text-stone-500">
+                <span>{restaurant?.taxLabelGlobal || 'GST'}</span>
+                <span className="font-bold text-stone-800">₹{totalTaxAmount.toFixed(2)}</span>
               </div>
             )}
 
-            <div className="flex justify-between text-base font-bold text-stone-900 pt-1">
-              <span>Total</span><span>₹{grandTotal.toFixed(2)}</span>
+            <div className="flex justify-between items-center text-sm font-black text-stone-900 pt-2 border-t border-orange-100">
+              <span className="uppercase tracking-wider">Total</span>
+              <span className="text-base text-[#ea580c]">₹{grandTotal.toFixed(2)}</span>
             </div>
           </div>
         </div>
 
-        {/* ── Step 1: Contact details ──────────────────────────────── */}
+        {/* ── Step 1: Customer Details & Delivery Address (Combined) ── */}
         {step === 1 && (
-          <div className="bg-white rounded-2xl p-5 space-y-4">
-            <div className="flex items-center gap-2">
-              <FiUser size={18} className="text-brand-orange" />
-              <h2 className="font-semibold text-stone-800">Your Details</h2>
+          <div className="bg-white rounded-3xl border-2 border-orange-100 p-6 space-y-5 shadow-sm">
+            
+            {/* Customer Details Header */}
+            <div className="flex items-center gap-2 border-b border-orange-100 pb-3">
+              <FiUser size={18} className="text-[#ea580c]" />
+              <h2 className="font-black text-stone-900 text-sm uppercase tracking-tight">Customer Details</h2>
             </div>
 
-            {/* Name */}
-            <div>
-              <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">Full Name</label>
-              <input
-                className={`w-full mt-1.5 border rounded-xl px-4 py-3 text-sm outline-none transition-colors ${errors.name ? 'border-red-400 bg-red-50' : 'border-stone-200 focus:border-brand-orange'
-                  }`}
-                placeholder="Enter your full name"
-                value={name}
-                onChange={e => { setName(e.target.value); setErrors(p => ({ ...p, name: '' })); }}
-              />
-              {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
-            </div>
-
-            {/* Phone */}
-            <div>
-              <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">Mobile Number</label>
-              <div className="flex gap-2 mt-1.5">
-                <div className="border border-stone-200 rounded-xl px-3 py-3 text-sm text-stone-400 bg-stone-50">+91</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Name */}
+              <div>
+                <label className="text-[11px] font-black text-stone-500 uppercase tracking-wide">Full Name *</label>
                 <input
-                  className={`flex-1 border rounded-xl px-4 py-3 text-sm outline-none transition-colors ${errors.phone ? 'border-red-400 bg-red-50' : 'border-stone-200 focus:border-brand-orange'
+                  className={`w-full mt-1.5 border rounded-xl px-4 py-3 text-sm outline-none transition-colors ${errors.name ? 'border-red-400 bg-red-50' : 'border-stone-200 focus:border-[#ea580c]'
                     }`}
-                  placeholder="10-digit number"
-                  value={phone}
-                  onChange={e => { setPhone(e.target.value); setErrors(p => ({ ...p, phone: '' })); }}
-                  maxLength={10}
-                  inputMode="numeric"
+                  placeholder="Enter your full name"
+                  value={name}
+                  onChange={e => { setName(e.target.value); setErrors(p => ({ ...p, name: '' })); }}
                 />
+                {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
               </div>
-              {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
+
+              {/* Phone */}
+              <div>
+                <label className="text-[11px] font-black text-stone-500 uppercase tracking-wide">Mobile Number *</label>
+                <div className="flex gap-2 mt-1.5">
+                  <div className="border border-stone-200 rounded-xl px-3.5 py-3 text-sm font-bold text-stone-500 bg-stone-50">+91</div>
+                  <input
+                    className={`flex-1 border rounded-xl px-4 py-3 text-sm outline-none transition-colors ${errors.phone ? 'border-red-400 bg-red-50' : 'border-stone-200 focus:border-[#ea580c]'
+                      }`}
+                    placeholder="10-digit mobile number"
+                    value={phone}
+                    onChange={e => { setPhone(e.target.value); setErrors(p => ({ ...p, phone: '' })); }}
+                    maxLength={10}
+                    inputMode="numeric"
+                  />
+                </div>
+                {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
+              </div>
             </div>
 
-            {/* Email — read-only, pre-filled from session */}
+            {/* Email — read-only */}
             <div>
-              <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">Email</label>
+              <label className="text-[11px] font-black text-stone-500 uppercase tracking-wide">Verified Email</label>
               <div className="relative mt-1.5">
                 <FiMail className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={15} />
                 {sessionLoading ? (
                   <div className="w-full border border-stone-200 rounded-xl px-4 py-3 pl-9 bg-stone-50 text-sm text-stone-300 animate-pulse">Loading…</div>
                 ) : (
                   <input
-                    className="w-full border border-green-300 bg-green-50 rounded-xl pl-9 pr-10 py-3 text-sm text-stone-600 outline-none cursor-default"
+                    className="w-full border border-emerald-300 bg-emerald-50/60 rounded-xl pl-9 pr-10 py-3 text-sm font-medium text-emerald-900 outline-none cursor-default"
                     value={email}
                     readOnly
                     tabIndex={-1}
                   />
                 )}
                 {!sessionLoading && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
                     <FiCheck size={11} className="text-white" />
                   </div>
                 )}
               </div>
-              <p className="text-xs text-stone-400 mt-1">Verified via OTP at sign-in</p>
+              <p className="text-[10px] text-stone-400 mt-1">Verified via OTP at sign-in</p>
             </div>
-          </div>
-        )}
 
-        {/* ── Step 2: Address / Takeaway confirm ──────────────────── */}
-        {step === 2 && (
-          <div className="bg-white rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <FiMapPin size={18} className="text-brand-orange" />
-              <h2 className="font-semibold text-stone-800">
+            {/* Delivery Address Header */}
+            <div className="flex items-center gap-2 pt-4 border-t border-orange-100 pb-2">
+              <FiMapPin size={18} className="text-[#ea580c]" />
+              <h2 className="font-black text-stone-900 text-sm uppercase tracking-tight">
                 {orderType === 'TAKEAWAY' ? 'Pickup Confirmation' : 'Delivery Address'}
               </h2>
             </div>
+
             {orderType === 'TAKEAWAY' ? (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
-                <p className="text-sm font-semibold text-amber-800">🛖 Takeaway Order</p>
-                <p className="text-xs text-amber-600">Your order will be ready for pickup. We&apos;ll send a confirmation to {email}.</p>
-                <div className="border-t border-amber-200 pt-2 mt-2">
-                  <p className="text-xs text-amber-700 font-medium">{name}</p>
-                  <p className="text-xs text-amber-700">+91 {phone}</p>
-                  <p className="text-xs text-amber-700">{email}</p>
-                </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
+                <p className="text-sm font-black text-amber-900">🛖 Takeaway Order</p>
+                <p className="text-xs text-amber-700 font-medium">Your order will be ready for pickup. We&apos;ll send a confirmation to {email}.</p>
                 <div className="mt-4 pt-2 border-t border-amber-200">
-                  <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">Cooking Instructions / Remarks (Optional)</label>
+                  <label className="text-[11px] font-black text-stone-500 uppercase tracking-wide">Cooking Instructions / Remarks (Optional)</label>
                   <textarea
-                    className="w-full mt-1.5 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-brand-orange resize-none h-20"
+                    className="w-full mt-1.5 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#ea580c] resize-none h-20 bg-white"
                     placeholder="E.g., Make it spicy, No onions..."
                     value={remarks}
                     onChange={e => setRemarks(e.target.value)}
@@ -733,9 +856,9 @@ function CheckoutPageInner() {
             ) : (
               <div className="space-y-4">
                 <div>
-                  <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">House / Flat / Building</label>
+                  <label className="text-[11px] font-black text-stone-500 uppercase tracking-wide">House / Flat / Building *</label>
                   <input
-                    className={`w-full mt-1.5 border rounded-xl px-4 py-3 text-sm outline-none transition-colors ${errors.line1 ? 'border-red-400 bg-red-50' : 'border-stone-200 focus:border-brand-orange'
+                    className={`w-full mt-1.5 border rounded-xl px-4 py-3 text-sm outline-none transition-colors ${errors.line1 ? 'border-red-400 bg-red-50' : 'border-stone-200 focus:border-[#ea580c]'
                       }`}
                     placeholder="Flat 4B, Rose Apartments"
                     value={address.line1}
@@ -743,24 +866,26 @@ function CheckoutPageInner() {
                   />
                   {errors.line1 && <p className="text-xs text-red-500 mt-1">{errors.line1}</p>}
                 </div>
+
                 <div>
-                  <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">Area / Locality</label>
+                  <label className="text-[11px] font-black text-stone-500 uppercase tracking-wide">Area / Landmark *</label>
                   <input
-                    className={`w-full mt-1.5 border rounded-xl px-4 py-3 text-sm outline-none transition-colors ${errors.area ? 'border-red-400 bg-red-50' : 'border-stone-200 focus:border-brand-orange'
+                    className={`w-full mt-1.5 border rounded-xl px-4 py-3 text-sm outline-none transition-colors ${errors.area ? 'border-red-400 bg-red-50' : 'border-stone-200 focus:border-[#ea580c]'
                       }`}
-                    placeholder="Swaraj Round, Punkunnam"
+                    placeholder="Near public park, Swaraj Round"
                     value={address.area}
                     onChange={e => { setAddress(p => ({ ...p, area: e.target.value })); setErrors(p => ({ ...p, area: '' })); }}
                   />
                   {errors.area && <p className="text-xs text-red-500 mt-1">{errors.area}</p>}
                 </div>
+
                 <div className="flex gap-3">
                   <div className="flex-1">
-                    <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">City</label>
+                    <label className="text-[11px] font-black text-stone-500 uppercase tracking-wide">City *</label>
                     <input
-                      className={`w-full mt-1.5 border rounded-xl px-4 py-3 text-sm outline-none transition-colors ${errors.city ? 'border-red-400 bg-red-50' : 'border-stone-200 focus:border-brand-orange'
+                      className={`w-full mt-1.5 border rounded-xl px-4 py-3 text-sm outline-none transition-colors ${errors.city ? 'border-red-400 bg-red-50' : 'border-stone-200 focus:border-[#ea580c]'
                         }`}
-                      placeholder="Thrissur"
+                      placeholder="Kozhikode"
                       value={address.city}
                       onChange={e => {
                         setAddress(p => ({ ...p, city: e.target.value }));
@@ -770,11 +895,11 @@ function CheckoutPageInner() {
                     {errors.city && <p className="text-xs text-red-500 mt-1">{errors.city}</p>}
                   </div>
                   <div className="flex-1">
-                    <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">Pincode</label>
+                    <label className="text-[11px] font-black text-stone-500 uppercase tracking-wide">Pincode *</label>
                     <input
-                      className={`w-full mt-1.5 border rounded-xl px-4 py-3 text-sm outline-none transition-colors ${errors.pincode ? 'border-red-400 bg-red-50' : 'border-stone-200 focus:border-brand-orange'
+                      className={`w-full mt-1.5 border rounded-xl px-4 py-3 text-sm outline-none transition-colors ${errors.pincode ? 'border-red-400 bg-red-50' : 'border-stone-200 focus:border-[#ea580c]'
                         }`}
-                      placeholder="680001"
+                      placeholder="673001"
                       value={address.pincode}
                       onChange={e => { setAddress(p => ({ ...p, pincode: e.target.value })); setErrors(p => ({ ...p, pincode: '' })); }}
                       maxLength={6}
@@ -784,25 +909,12 @@ function CheckoutPageInner() {
                   </div>
                 </div>
 
-                <div className="mt-2 pt-2 border-t border-stone-100">
-                  <label className="text-xs font-semibold text-stone-700 uppercase tracking-wide flex items-center gap-1">
-                    📝 Instructions / Remarks <span className="text-stone-400 font-normal lowercase">(optional)</span>
-                  </label>
-                  <textarea
-                    className="w-full mt-1.5 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-brand-orange resize-none h-20 bg-stone-50/50"
-                    placeholder="E.g., Make it spicy, No onions, Leave at door..."
-                    value={remarks}
-                    onChange={e => setRemarks(e.target.value)}
-                  />
-                </div>
-
                 {/* Leaflet Map Picker */}
                 {mapLoaded && (
                   <div className="space-y-2 mt-4 pt-2 border-t border-stone-100">
-                    <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Pin Your Location on Map</label>
-                    <div id="map-picker" className="h-60 w-full rounded-xl border border-stone-200 overflow-hidden z-0" />
-                    <p className="text-[10px] text-stone-400">Drag the red marker or click on the map to pin your exact delivery location.</p>
-
+                    <label className="text-[11px] font-black text-stone-500 uppercase tracking-wide">Pin Your Location on Map</label>
+                    <div id="map-picker" className="h-60 w-full rounded-2xl border border-stone-200 overflow-hidden z-0 shadow-sm" />
+                    
                     {/* Real-time distance and delivery zone status */}
                     {hasBranchCoords && currentDistanceKm != null && (
                       <div className={`mt-3 p-3.5 rounded-xl border flex flex-col gap-1.5 transition-all duration-300 ${deliveryRadiusEnforced
@@ -822,14 +934,6 @@ function CheckoutPageInner() {
                           </span>
                           <span>{currentDistanceKm.toFixed(2)} km away</span>
                         </div>
-                        <p className="text-[11px] opacity-90 leading-normal">
-                          {deliveryRadiusEnforced
-                            ? currentDistanceKm > Number(restaurant.deliveryRadiusKm)
-                              ? `This branch only delivers within a ${restaurant.deliveryRadiusKm} km radius. You are currently ${(currentDistanceKm - restaurant.deliveryRadiusKm).toFixed(2)} km outside our zone.`
-                              : `You are well within our ${restaurant.deliveryRadiusKm} km delivery radius. We will deliver straight to your door!`
-                            : `Delivery radius is unrestricted for this branch. Your distance from the restaurant is ${currentDistanceKm.toFixed(2)} km.`
-                          }
-                        </p>
                       </div>
                     )}
                     {errors.distance && (
@@ -844,12 +948,12 @@ function CheckoutPageInner() {
           </div>
         )}
 
-        {/* ── Step 3: Payment (Online + COD) ───────────────────────────── */}
-        {step === 3 && (
-          <div className="bg-white rounded-2xl p-5 space-y-4">
+        {/* ── Step 2: Payment (Online + COD) ───────────────────────────── */}
+        {step === 2 && (
+          <div className="bg-white rounded-3xl border-2 border-orange-100 p-6 space-y-4 shadow-sm">
             <div className="flex items-center gap-2 mb-1">
-              <FiCreditCard size={18} className="text-brand-orange" />
-              <h2 className="font-semibold text-stone-800">Choose Payment Method</h2>
+              <FiCreditCard size={18} className="text-[#ea580c]" />
+              <h2 className="font-black text-stone-900 text-sm uppercase tracking-tight">Choose Payment Method</h2>
             </div>
 
             {/* Error Banner */}
@@ -868,22 +972,21 @@ function CheckoutPageInner() {
               <button
                 type="button"
                 onClick={() => { setPayment('ONLINE'); setPaymentError(''); }}
-                className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
+                className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left ${
                   payment === 'ONLINE'
-                    ? 'border-brand-orange bg-orange-50/70 shadow-sm'
+                    ? 'border-[#ea580c] bg-orange-50/70 shadow-sm'
                     : 'border-stone-200 hover:border-stone-300 bg-white'
                 }`}
               >
                 <span className="text-2xl">💳</span>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-stone-900">UPI / Cards / NetBanking</p>
-                    <span className="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Fast & Secure</span>
+                    <p className="text-sm font-black text-stone-900">UPI / Cards / NetBanking</p>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-black px-2 py-0.5 rounded-full uppercase tracking-wider">Fast & Secure</span>
                   </div>
-                  <p className="text-xs text-stone-400 mt-0.5">Google Pay, PhonePe, Paytm, Cards, UPI</p>
                 </div>
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                  payment === 'ONLINE' ? 'border-brand-orange bg-brand-orange' : 'border-stone-300 bg-white'
+                  payment === 'ONLINE' ? 'border-[#ea580c] bg-[#ea580c]' : 'border-stone-300 bg-white'
                 }`}>
                   {payment === 'ONLINE' && <div className="w-2 h-2 bg-white rounded-full" />}
                 </div>
@@ -894,66 +997,54 @@ function CheckoutPageInner() {
             <button
               type="button"
               onClick={() => { setPayment('COD'); setPaymentError(''); }}
-              className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
+              className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left ${
                 payment === 'COD'
-                  ? 'border-brand-orange bg-orange-50/70 shadow-sm'
+                  ? 'border-[#ea580c] bg-orange-50/70 shadow-sm'
                   : 'border-stone-200 hover:border-stone-300 bg-white'
               }`}
             >
               <span className="text-2xl">💵</span>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-stone-900">
+                <p className="text-sm font-black text-stone-900">
                   {orderType === 'TAKEAWAY' ? 'Pay at Counter' : 'Cash on Delivery (COD)'}
-                </p>
-                <p className="text-xs text-stone-400 mt-0.5">
-                  {orderType === 'TAKEAWAY' ? 'Pay when you collect your order' : 'Pay with cash or UPI when your food arrives'}
                 </p>
               </div>
               <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                payment === 'COD' ? 'border-brand-orange bg-brand-orange' : 'border-stone-300 bg-white'
+                payment === 'COD' ? 'border-[#ea580c] bg-[#ea580c]' : 'border-stone-300 bg-white'
               }`}>
                 {payment === 'COD' && <div className="w-2 h-2 bg-white rounded-full" />}
               </div>
             </button>
-
-            {!restaurant?.onlinePaymentEnabled && (
-              <p className="text-xs text-stone-400 text-center pt-1">
-                ℹ️ Online payment is currently not configured for this restaurant.
-              </p>
-            )}
           </div>
         )}
 
       </div>
 
       {/* Bottom CTA */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-100 px-4 py-4 z-20">
-        {step < 3 ? (
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-100 px-4 py-4 z-20 shadow-lg">
+        {step === 1 ? (
           <button
             onClick={() => {
-              if (step === 1 && !validateStep1()) return;
-              if (step === 2 && !validateStep2()) return;
-              setStep(s => s + 1);
+              if (!validateStep1()) return;
+              setStep(2);
             }}
-            className="w-full bg-brand-orange hover:bg-orange-600 text-white font-semibold py-4 rounded-xl transition-colors"
+            className="w-full bg-gradient-to-r from-[#f97316] via-[#ea580c] to-[#c2410c] hover:from-[#ea580c] hover:to-[#9a3412] text-white font-black py-4 rounded-2xl transition-all text-sm uppercase tracking-wider shadow-lg shadow-orange-500/25 transform hover:scale-[1.01] active:scale-[0.99]"
           >
-            Continue →
+            Continue to Payment →
           </button>
         ) : (
           <button
             onClick={payment === 'ONLINE' ? handleOnlinePayment : handlePlaceOrder}
             disabled={placing}
-            className="w-full bg-brand-orange hover:bg-orange-600 disabled:opacity-70 text-white font-semibold py-4 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20"
+            className="w-full bg-gradient-to-r from-[#f97316] via-[#ea580c] to-[#c2410c] hover:from-[#ea580c] hover:to-[#9a3412] disabled:opacity-70 text-white font-black py-4 rounded-2xl transition-all text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 transform hover:scale-[1.01] active:scale-[0.99]"
           >
             {placing ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                {payment === 'ONLINE' ? 'Processing Payment…' : 'Placing Order…'}
+                <span>Placing Your Order...</span>
               </>
-            ) : payment === 'ONLINE' ? (
-              `Pay Online · ₹${grandTotal.toFixed(2)}`
             ) : (
-              `Place Order · ₹${grandTotal.toFixed(2)}`
+              <span>Place Order ₹{grandTotal.toFixed(2)}</span>
             )}
           </button>
         )}
