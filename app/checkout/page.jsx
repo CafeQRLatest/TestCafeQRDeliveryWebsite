@@ -545,12 +545,47 @@ function CheckoutPageInner() {
           }
         },
         handler: async (response) => {
-          let orderId = orderData.orderId || response.razorpay_order_id;
           try {
-            sessionStorage.removeItem(`cart_${restaurantId}`);
-            sessionStorage.removeItem('delivery_remarks');
-          } catch { }
-          router.push(`/track?id=${orderId}&r=${restaurantId}${orgId ? `&orgId=${orgId}` : ''}`);
+            setPlacing(true);
+            const placeRes = await apiPlaceOrder({
+              clientId: restaurantId,
+              orgId: orgId || null,
+              customerEmail: email,
+              customerName: name,
+              customerPhone: phone,
+              deliveryAddress: deliveryAddressStr,
+              note: remarks || '',
+              remarks: remarks || '',
+              fulfillmentType: orderType,
+              paymentMethod: 'ONLINE',
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpaySignature: response.razorpay_signature,
+              latitude: address?.latitude || null,
+              longitude: address?.longitude || null,
+              items: cart.map(i => ({
+                productId: i.id,
+                quantity: i.qty,
+                variantId: i.variantId || null,
+                variantName: i.variantName || null,
+                variantPrice: i.variantPrice || null
+              }))
+            });
+
+            const placedData = placeRes.data?.data || placeRes.data;
+            const orderId = placedData?.orderId || placedData?.id;
+
+            try {
+              sessionStorage.removeItem(`cart_${restaurantId}`);
+              sessionStorage.removeItem('delivery_remarks');
+            } catch { }
+
+            router.push(`/track?id=${orderId}&r=${restaurantId}${orgId ? `&orgId=${orgId}` : ''}`);
+          } catch (placeErr) {
+            console.error('Error placing paid order:', placeErr);
+            setPaymentError(placeErr.response?.data?.message || placeErr.message || 'Payment received but failed to create order record. Please contact support.');
+            setPlacing(false);
+          }
         }
       };
 
