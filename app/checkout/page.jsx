@@ -13,6 +13,15 @@ function CheckoutPageInner() {
   const orderType = searchParams.get('t') || 'DELIVERY';
   const orgId = searchParams.get('orgId') || searchParams.get('branchId') || '';
 
+  const getMenuUrl = () => {
+    const params = new URLSearchParams();
+    if (restaurantId) params.set('r', restaurantId);
+    if (orderType) params.set('t', orderType);
+    if (orgId) params.set('orgId', orgId);
+    params.set('tab', 'menu');
+    return `/order?${params.toString()}`;
+  };
+
   // Steps: 1=contact, 2=address, 3=payment+confirm
   const [step, setStep] = useState(1);
   const [cart, setCart] = useState([]);
@@ -578,7 +587,7 @@ function CheckoutPageInner() {
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
         <span className="text-5xl">🛒</span>
         <h2 className="font-bold text-stone-800 text-lg">Your cart is empty</h2>
-        <button onClick={() => router.back()} className="bg-brand-orange text-white px-6 py-3 rounded-xl font-semibold text-sm">← Back to Menu</button>
+        <button onClick={() => router.push(getMenuUrl())} className="bg-brand-orange text-white px-6 py-3 rounded-xl font-semibold text-sm">← Back to Menu</button>
       </div>
     );
   }
@@ -590,7 +599,7 @@ function CheckoutPageInner() {
       <div className="bg-white sticky top-0 z-10 border-b border-stone-100">
         <div className="flex items-center gap-3 px-4 py-4">
           <button
-            onClick={() => step === 1 ? router.push('/order?tab=menu') : setStep(s => s - 1)}
+            onClick={() => step === 1 ? router.push(getMenuUrl()) : setStep(s => s - 1)}
             className="p-1.5 -ml-1 rounded-lg hover:bg-stone-100 text-stone-500 transition-colors"
             title="Back to products catalog"
           >
@@ -646,7 +655,7 @@ function CheckoutPageInner() {
                   try {
                     if (restaurantId) sessionStorage.removeItem(`cart_${restaurantId}`);
                   } catch (e) { }
-                  router.push('/order');
+                  router.push(getMenuUrl());
                 }}
                 className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 hover:border-rose-300 text-[11px] sm:text-xs font-black px-3 py-1.5 rounded-full shadow-2xs transition-all uppercase tracking-wider flex items-center gap-1.5"
                 title="Clear all items from cart"
@@ -658,7 +667,7 @@ function CheckoutPageInner() {
               {/* Add More Items Button (Beautified Primary Theme Button) */}
               <button
                 type="button"
-                onClick={() => router.push('/order')}
+                onClick={() => router.push(getMenuUrl())}
                 className="bg-[#f97316] hover:bg-[#ea580c] text-white text-[11px] sm:text-xs font-black px-3.5 py-1.5 rounded-full shadow-sm hover:shadow-md transition-all uppercase tracking-wider flex items-center gap-1.5"
               >
                 <FiPlus size={13} />
@@ -695,7 +704,7 @@ function CheckoutPageInner() {
                         try {
                           if (restaurantId) sessionStorage.setItem(`cart_${restaurantId}`, JSON.stringify(updated));
                         } catch (e) { }
-                        if (updated.length === 0) router.push('/order');
+                        if (updated.length === 0) router.push(getMenuUrl());
                       }}
                       className="w-4 h-4 rounded-full bg-orange-100 text-[#ea580c] hover:bg-[#f97316] hover:text-white flex items-center justify-center transition-colors text-xs font-black"
                     >
@@ -732,7 +741,7 @@ function CheckoutPageInner() {
                       try {
                         if (restaurantId) sessionStorage.setItem(`cart_${restaurantId}`, JSON.stringify(updated));
                       } catch (e) { }
-                      if (updated.length === 0) router.push('/order');
+                      if (updated.length === 0) router.push(getMenuUrl());
                     }}
                     className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white hover:bg-rose-50 text-stone-400 hover:text-rose-600 border border-stone-200/80 hover:border-rose-200 flex items-center justify-center transition-all shadow-2xs shrink-0"
                     title="Delete item"

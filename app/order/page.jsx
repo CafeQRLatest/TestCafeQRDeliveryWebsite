@@ -58,8 +58,8 @@ function OrderPageInner({ slugHandle, branchHandle }) {
 
   const targetHandle = slugHandle || queryRestaurantId;
   const targetBranch = branchHandle || queryOrgId;
-
-  const [activeTab, setActiveTab] = useState('home'); // 'home' | 'menu' | 'about' | 'location'
+  const queryTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(queryTab || 'home'); // 'home' | 'menu' | 'about' | 'location'
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [showOrdersModal, setShowOrdersModal] = useState(false);
@@ -232,23 +232,23 @@ function OrderPageInner({ slugHandle, branchHandle }) {
         if (res.ok) {
           return res.json().then(data => {
             setIsAuthenticated(true);
-            setActiveTab('menu');
+            setActiveTab(queryTab || 'menu');
             if (data?.email) setUserEmail(data.email);
           });
         } else {
           setIsAuthenticated(false);
-          setActiveTab('home');
+          setActiveTab(queryTab || 'home');
         }
       })
       .catch(() => {
         setIsAuthenticated(false);
-        setActiveTab('home');
+        setActiveTab(queryTab || 'home');
       })
       .finally(() => {
         clearTimeout(timeout);
         setCheckingSession(false);
       });
-  }, []);
+  }, [queryTab]);
 
 
   // ── Countdown timer for OTP resend ──
