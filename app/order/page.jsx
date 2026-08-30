@@ -177,6 +177,7 @@ function OrderPageInner({ slugHandle, branchHandle }) {
   const [otp, setOtp] = useState('');
   const [otpVerified, setOtpVerified] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
 
   // ── Customer Profile state ──
@@ -258,14 +259,23 @@ function OrderPageInner({ slugHandle, branchHandle }) {
   }, [resendTimer]);
 
 
+  const getItemCategory = (i) => {
+    if (!i) return 'General';
+    const cat = i.category || i.categoryName;
+    if (typeof cat === 'string' && cat.trim()) return cat.trim();
+    if (cat && typeof cat === 'object' && cat.name) return cat.name.trim();
+    return 'General';
+  };
 
   // ── 2. Fetch Branch-Wise Settings & Products ──
   useEffect(() => {
     if (!targetHandle) return;
 
+    let safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 4000);
+
     const loadBranchData = async () => {
-      setLoading(true);
-      const safetyTimer = setTimeout(() => setLoading(false), 2500);
       try {
         let activeClientId = targetHandle;
         let activeOrgId = targetBranch;
@@ -338,7 +348,16 @@ function OrderPageInner({ slugHandle, branchHandle }) {
 
           if (items && items.length > 0) {
             setMenu(items);
-            const cats = Array.from(new Set(items.map(i => i.category || i.categoryName || 'General'))).filter(Boolean);
+            // Deduplicate categories case-insensitively
+            const categoryMap = new Map();
+            items.forEach(i => {
+              const rawName = getItemCategory(i);
+              const lower = rawName.toLowerCase();
+              if (!categoryMap.has(lower)) {
+                categoryMap.set(lower, rawName);
+              }
+            });
+            const cats = Array.from(categoryMap.values());
             setCategories(cats);
             if (cats.length > 0) setActiveCategory('ALL');
           } else {
@@ -565,17 +584,17 @@ function OrderPageInner({ slugHandle, branchHandle }) {
       (i.description || '').toLowerCase().includes(search.toLowerCase());
     const isVeg = i.isVeg ?? i.is_veg ?? (i.productType === 'VEG' || i.productType === 'Vegetarian');
     const matchVeg = !vegOnly || !categoryInfo.showVegFilter || isVeg;
-    const catName = (i.category || i.categoryName || 'General');
-    const matchCategory = !activeCategory || activeCategory === 'ALL' || catName === activeCategory;
+    const catName = getItemCategory(i);
+    const matchCategory = !activeCategory || activeCategory === 'ALL' || catName.toLowerCase() === activeCategory.toLowerCase();
     return matchSearch && matchVeg && matchCategory;
   });
 
   const displayCategories = (!activeCategory || activeCategory === 'ALL')
     ? categories
-    : categories.filter(c => c === activeCategory);
+    : categories.filter(c => c.toLowerCase() === activeCategory.toLowerCase());
 
   const grouped = displayCategories.reduce((acc, cat) => {
-    acc[cat] = filtered.filter(i => (i.category || i.categoryName || 'General') === cat);
+    acc[cat] = filtered.filter(i => getItemCategory(i).toLowerCase() === cat.toLowerCase());
     return acc;
   }, {});
 
