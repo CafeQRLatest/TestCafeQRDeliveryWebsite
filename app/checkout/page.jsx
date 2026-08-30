@@ -3,6 +3,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { FiArrowLeft, FiMapPin, FiUser, FiPhone, FiCreditCard, FiCheck, FiMail, FiPlus, FiMinus, FiTrash2 } from 'react-icons/fi';
 import { placeOrder as apiPlaceOrder, createDeliveryPaymentOrder, fetchDeliverySettings } from '@/lib/apiClient';
+import { decryptOrgId } from '@/lib/tokenEncryption';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://cafe-qr-backend.onrender.com/api';
 
@@ -11,13 +12,28 @@ function CheckoutPageInner() {
   const router = useRouter();
   const restaurantId = searchParams.get('r');
   const orderType = searchParams.get('t') || 'DELIVERY';
-  const orgId = searchParams.get('orgId') || searchParams.get('branchId') || '';
+  const slugParam = searchParams.get('slug');
+  const branchParam = searchParams.get('branch');
+  const rawOrgParam = searchParams.get('orgId') || searchParams.get('branchId') || '';
+  const orgId = decryptOrgId(rawOrgParam);
 
   const getMenuUrl = () => {
+    const slug = slugParam || (typeof window !== 'undefined' ? sessionStorage.getItem('last_delivery_slug') : null);
+    const branch = branchParam || (typeof window !== 'undefined' ? sessionStorage.getItem('last_delivery_branch') : null);
+    const savedOrgId = orgId || (typeof window !== 'undefined' ? sessionStorage.getItem('last_delivery_orgId') : null);
+    const savedRestaurantId = restaurantId || (typeof window !== 'undefined' ? sessionStorage.getItem('last_delivery_r') : null);
+
+    if (slug && branch) {
+      return `/${slug}/${branch}?tab=menu&t=${orderType}`;
+    }
+    if (slug) {
+      return `/${slug}?tab=menu&t=${orderType}${savedOrgId ? `&orgId=${savedOrgId}` : ''}`;
+    }
+
     const params = new URLSearchParams();
-    if (restaurantId) params.set('r', restaurantId);
+    if (savedRestaurantId) params.set('r', savedRestaurantId);
     if (orderType) params.set('t', orderType);
-    if (orgId) params.set('orgId', orgId);
+    if (savedOrgId) params.set('orgId', savedOrgId);
     params.set('tab', 'menu');
     return `/order?${params.toString()}`;
   };

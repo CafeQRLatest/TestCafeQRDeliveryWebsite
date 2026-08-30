@@ -8,6 +8,7 @@ import CartDrawer from '@/components/CartDrawer';
 import FloatingCartBar from '@/components/FloatingCartBar';
 import VariantSelectorModal from '@/components/VariantSelectorModal';
 import { fetchDeliverySettings, fetchMenu, resolveSlug, fetchReviews, submitReview } from '@/lib/apiClient';
+import { decryptOrgId } from '@/lib/tokenEncryption';
 
 /**
  * Dynamic Category Info Resolver based on Store/Branch posType
@@ -54,7 +55,8 @@ function OrderPageInner({ slugHandle, branchHandle }) {
   const router = useRouter();
   const queryRestaurantId = searchParams.get('r') || '48278854-f080-4681-b6e7-54cebd11b7f7';
   const orderType = searchParams.get('t') || 'DELIVERY';
-  const queryOrgId = searchParams.get('orgId') || searchParams.get('branchId') || '';
+  const rawOrgParam = searchParams.get('orgId') || searchParams.get('branchId') || (typeof window !== 'undefined' ? sessionStorage.getItem('last_delivery_orgId') : '') || '';
+  const queryOrgId = decryptOrgId(rawOrgParam);
 
   const targetHandle = slugHandle || queryRestaurantId;
   const targetBranch = branchHandle || queryOrgId;
@@ -297,6 +299,13 @@ function OrderPageInner({ slugHandle, branchHandle }) {
           console.warn('[CafeQR] Direct ID resolution used', e);
         }
 
+        if (typeof window !== 'undefined') {
+          if (slugHandle || resolvedIds.clientSlug) sessionStorage.setItem('last_delivery_slug', slugHandle || resolvedIds.clientSlug || '');
+          if (branchHandle || resolvedIds.branchSlug) sessionStorage.setItem('last_delivery_branch', branchHandle || resolvedIds.branchSlug || '');
+          if (activeClientId) sessionStorage.setItem('last_delivery_r', activeClientId);
+          if (activeOrgId) sessionStorage.setItem('last_delivery_orgId', activeOrgId);
+        }
+
         // Fetch Branch Settings & Menu in Parallel
         const [settingsRes, menuRes] = await Promise.allSettled([
           fetchDeliverySettings(activeClientId, activeOrgId),
@@ -342,29 +351,30 @@ function OrderPageInner({ slugHandle, branchHandle }) {
           }
         }
 
+        let items = [];
         if (menuRes.status === 'fulfilled') {
           const mData = menuRes.value?.data?.data || menuRes.value?.data;
-          const items = Array.isArray(mData) ? mData : (mData?.items || mData?.products || []);
+          items = Array.isArray(mData) ? mData : (mData?.items || mData?.products || []);
+        }
 
-          if (items && items.length > 0) {
-            setMenu(items);
-            // Deduplicate categories case-insensitively
-            const categoryMap = new Map();
-            items.forEach(i => {
-              const rawName = getItemCategory(i);
-              const lower = rawName.toLowerCase();
-              if (!categoryMap.has(lower)) {
-                categoryMap.set(lower, rawName);
-              }
-            });
-            const cats = Array.from(categoryMap.values());
-            setCategories(cats);
-            if (cats.length > 0) setActiveCategory('ALL');
-          } else {
-            setMenu([]);
-            setCategories([]);
-            setActiveCategory(null);
-          }
+        if (items && items.length > 0) {
+          setMenu(items);
+          // Deduplicate categories case-insensitively
+          const categoryMap = new Map();
+          items.forEach(i => {
+            const rawName = getItemCategory(i);
+            const lower = rawName.toLowerCase();
+            if (!categoryMap.has(lower)) {
+              categoryMap.set(lower, rawName);
+            }
+          });
+          const cats = Array.from(categoryMap.values());
+          setCategories(cats);
+          if (cats.length > 0) setActiveCategory('ALL');
+        } else {
+          setMenu([]);
+          setCategories([]);
+          setActiveCategory(null);
         }
       } catch (e) {
         console.error('Error loading branch delivery data', e);
@@ -998,7 +1008,7 @@ function OrderPageInner({ slugHandle, branchHandle }) {
                 localStorage.setItem(`cart_${restaurantId}`, JSON.stringify(cart));
                 sessionStorage.setItem(`cart_${restaurantId}`, JSON.stringify(cart));
               } catch { }
-              router.push(`/checkout?r=${restaurantId}&t=${orderType}${orgId ? `&orgId=${orgId}` : ''}`);
+              router.push(`/checkout?r=${restaurantId}&t=${orderType}${orgId ? `&orgId=${orgId}` : ''}${resolvedIds.clientSlug ? `&slug=${resolvedIds.clientSlug}` : (slugHandle ? `&slug=${slugHandle}` : '')}${resolvedIds.branchSlug ? `&branch=${resolvedIds.branchSlug}` : (branchHandle ? `&branch=${branchHandle}` : '')}`);
             }}
           />
 

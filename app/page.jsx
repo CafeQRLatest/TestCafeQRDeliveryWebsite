@@ -22,7 +22,7 @@ function HomeInner() {
   const router = useRouter();
   const r = searchParams.get('r') || '48278854-f080-4681-b6e7-54cebd11b7f7';
   const t = searchParams.get('t') || 'DELIVERY';
-  const orgId = searchParams.get('orgId') || searchParams.get('branchId') || '';
+  const orgId = searchParams.get('orgId') || searchParams.get('branchId') || (typeof window !== 'undefined' ? sessionStorage.getItem('last_delivery_orgId') : '') || '';
 
   // ── Session check ──────────────────────────────────────────────────────────
   // On mount, ping a lightweight session-check endpoint.
