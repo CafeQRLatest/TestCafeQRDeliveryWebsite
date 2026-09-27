@@ -1,13 +1,13 @@
-'use client';
-import { useParams } from 'next/navigation';
+export const runtime = 'edge';
+
 import OrderPage from '../order/page';
 
 /**
  * Dynamic Clean Slug Route: /:slug
  * E.g., /arnos-marketing or /riyas-cafe
  */
-export default function DynamicStorePage() {
-  const params = useParams();
+export default function DynamicStorePage({ params }) {
   const slug = params?.slug;
   return <OrderPage slugHandle={slug} />;
 }
+

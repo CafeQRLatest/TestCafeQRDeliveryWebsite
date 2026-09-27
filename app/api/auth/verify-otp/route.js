@@ -9,20 +9,30 @@
 // Response 200:  { verified: true, email, name, phone }  + Set-Cookie
 // Response 4xx:  { error: string }
 
+export const runtime = 'edge';
+
 import { NextResponse } from 'next/server';
-import { createHmac } from 'crypto';
 
 const SESSION_TTL_DAYS = 7;
 const SESSION_COOKIE = 'delivery_session';
 
-function buildSessionToken({ email, name = '', phone = '' }) {
-  const payload = Buffer
-    .from(JSON.stringify({ email, name, phone, iat: Date.now() }))
-    .toString('base64')
-    .replace(/=/g, '');
+async function buildSessionToken({ email, name = '', phone = '' }) {
+  const payloadStr = JSON.stringify({ email, name, phone, iat: Date.now() });
+  const payload = btoa(unescape(encodeURIComponent(payloadStr))).replace(/=/g, '');
 
   const secret = process.env.INTERNAL_API_SECRET || 'dev-secret-change-me';
-  const sig = createHmac('sha256', secret).update(payload).digest('hex');
+  const enc = new TextEncoder();
+  const key = await globalThis.crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sigBuf = await globalThis.crypto.subtle.sign('HMAC', key, enc.encode(payload));
+  const sig = Array.from(new Uint8Array(sigBuf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 
   return `${payload}.${sig}`;
 }
@@ -64,7 +74,7 @@ export async function POST(req) {
     const resolvedPhone = data?.data?.phone || phone || '';
     const resolvedEmail = data?.data?.email || email;
 
-    const token = buildSessionToken({
+    const token = await buildSessionToken({
       email: resolvedEmail,
       name: resolvedName,
       phone: resolvedPhone,

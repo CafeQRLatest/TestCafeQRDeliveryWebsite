@@ -9,6 +9,8 @@
 // NOTE: Delivery Website customer auth ONLY.
 //       Does NOT affect staff/POS auth in cafeTestQRFrontend.
 
+export const runtime = 'edge';
+
 import { NextResponse } from 'next/server';
 import { getDeliverySession } from '@/lib/auth';
 
