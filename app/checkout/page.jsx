@@ -346,22 +346,31 @@ function CheckoutPageInner() {
 
   // ── Auto-prefill Customer Profile (Name, Phone, Address, Landmark, City, Pincode) ─────
   useEffect(() => {
-    if (!email || typeof window === 'undefined') return;
+    if (!email || typeof window === 'undefined') {
+      setName('');
+      setPhone('');
+      setAddress({ line1: '', area: '', city: '', pincode: '' });
+      return;
+    }
     try {
       const savedProfile = localStorage.getItem(`profile_${email}`);
       if (savedProfile) {
         const p = JSON.parse(savedProfile);
-        if (p.fullName) setName(p.fullName);
-        if (p.phone) setPhone(String(p.phone).replace(/\D/g, '').slice(-10));
+        setName(p.fullName || '');
+        setPhone(p.phone ? String(p.phone).replace(/\D/g, '').slice(-10) : '');
         
-        setAddress(prev => ({
-          line1: p.address || prev.line1 || '',
-          area: p.landmark || prev.area || '',
-          city: p.city || prev.city || 'Kozhikode',
-          pincode: p.pincode || prev.pincode || '673001'
-        }));
+        setAddress({
+          line1: p.address || '',
+          area: p.landmark || '',
+          city: p.city || '',
+          pincode: p.pincode || ''
+        });
 
         if (p.deliveryNotes && !remarks) setRemarks(p.deliveryNotes);
+      } else {
+        setName('');
+        setPhone('');
+        setAddress({ line1: '', area: '', city: '', pincode: '' });
       }
     } catch (e) {
       console.warn('Failed to load profile in checkout', e);
@@ -468,8 +477,13 @@ function CheckoutPageInner() {
         deliveryAddress: deliveryAddressStr,
         note: `Payment: COD`,
         remarks: remarks,
-        paymentMethod: 'COD',
-        items: cart.map(i => ({ productId: i.id, quantity: i.qty })),
+        items: cart.map(i => ({
+          productId: i.productId || i.id,
+          quantity: i.qty,
+          variantId: i.variantId || null,
+          variantName: i.variantName || null,
+          variantPrice: i.price || null
+        })),
         latitude: orderType === 'DELIVERY' ? latitude : null,
         longitude: orderType === 'DELIVERY' ? longitude : null,
       };
@@ -484,9 +498,15 @@ function CheckoutPageInner() {
         orderId = 'DEL-' + Math.random().toString(36).slice(2, 8).toUpperCase();
       }
 
+      setCart([]);
       try {
-        sessionStorage.removeItem(`cart_${restaurantId}`);
-        sessionStorage.removeItem('delivery_remarks');
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(`cart_${restaurantId}`);
+          sessionStorage.removeItem(`cart_${restaurantId}`);
+          localStorage.removeItem('cart');
+          sessionStorage.removeItem('cart');
+          sessionStorage.removeItem('delivery_remarks');
+        }
       } catch { }
       router.push(`/track?id=${orderId}&r=${restaurantId}${orgId ? `&orgId=${orgId}` : ''}`);
     } catch (err) {
@@ -516,7 +536,13 @@ function CheckoutPageInner() {
         customerName: name,
         customerPhone: phone,
         fulfillmentType: orderType,
-        items: cart.map(i => ({ productId: i.id, quantity: i.qty }))
+        items: cart.map(i => ({
+          productId: i.productId || i.id,
+          quantity: i.qty,
+          variantId: i.variantId || null,
+          variantName: i.variantName || null,
+          variantPrice: i.price || null
+        }))
       });
 
       const orderData = res.data?.data || res.data;
@@ -564,20 +590,26 @@ function CheckoutPageInner() {
               latitude: address?.latitude || null,
               longitude: address?.longitude || null,
               items: cart.map(i => ({
-                productId: i.id,
+                productId: i.productId || i.id,
                 quantity: i.qty,
                 variantId: i.variantId || null,
                 variantName: i.variantName || null,
-                variantPrice: i.variantPrice || null
+                variantPrice: i.price || null
               }))
             });
 
             const placedData = placeRes.data?.data || placeRes.data;
             const orderId = placedData?.orderId || placedData?.id;
 
+            setCart([]);
             try {
-              sessionStorage.removeItem(`cart_${restaurantId}`);
-              sessionStorage.removeItem('delivery_remarks');
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem(`cart_${restaurantId}`);
+                sessionStorage.removeItem(`cart_${restaurantId}`);
+                localStorage.removeItem('cart');
+                sessionStorage.removeItem('cart');
+                sessionStorage.removeItem('delivery_remarks');
+              }
             } catch { }
 
             router.push(`/track?id=${orderId}&r=${restaurantId}${orgId ? `&orgId=${orgId}` : ''}`);

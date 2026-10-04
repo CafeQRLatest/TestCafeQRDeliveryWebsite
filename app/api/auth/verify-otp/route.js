@@ -40,7 +40,7 @@ async function buildSessionToken({ email, name = '', phone = '' }) {
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { email, otp, name = '', phone = '' } = body;
+    const { email, otp, name = '', phone = '', clientId = null, orgId = null } = body;
 
     if (!email || !otp) {
       return NextResponse.json(
@@ -56,7 +56,7 @@ export async function POST(req) {
     const upstream = await fetch(`${backendUrl}/v1/auth/customer/verify-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, otp }),
+      body: JSON.stringify({ email, otp, clientId, orgId, name, phone }),
     });
 
     const data = await upstream.json().catch(() => ({}));
@@ -70,9 +70,12 @@ export async function POST(req) {
     }
 
     // ── OTP verified — issue session cookie ──────────────────────────────────
-    const resolvedName = data?.data?.name || name || '';
-    const resolvedPhone = data?.data?.phone || phone || '';
-    const resolvedEmail = data?.data?.email || email;
+    const resolvedCustomer = data?.data || {};
+    const resolvedName = resolvedCustomer.name || name || '';
+    const resolvedPhone = resolvedCustomer.phone || phone || '';
+    const resolvedAddress = resolvedCustomer.address || '';
+    const resolvedCustomerId = resolvedCustomer.customerId || null;
+    const resolvedEmail = resolvedCustomer.email || email;
 
     const token = await buildSessionToken({
       email: resolvedEmail,
@@ -85,6 +88,8 @@ export async function POST(req) {
       email: resolvedEmail,
       name: resolvedName,
       phone: resolvedPhone,
+      address: resolvedAddress,
+      customerId: resolvedCustomerId,
     });
 
     response.cookies.set(SESSION_COOKIE, token, {

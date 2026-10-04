@@ -7,7 +7,7 @@ import MenuItemCard from '@/components/MenuItemCard';
 import CartDrawer from '@/components/CartDrawer';
 import FloatingCartBar from '@/components/FloatingCartBar';
 import VariantSelectorModal from '@/components/VariantSelectorModal';
-import { fetchDeliverySettings, fetchMenu, resolveSlug, fetchReviews, submitReview } from '@/lib/apiClient';
+import { fetchDeliverySettings, fetchMenu, resolveSlug, fetchReviews, submitReview, fetchCustomerOrdersList, fetchCustomerProfile, saveCustomerProfile } from '@/lib/apiClient';
 import { decryptOrgId } from '@/lib/tokenEncryption';
 
 /**
@@ -195,23 +195,128 @@ function OrderPageInner({ slugHandle, branchHandle }) {
   });
   const [profileMsg, setProfileMsg] = useState('');
 
+  // Always sync profileForm strictly to the currently logged in customer email
   useEffect(() => {
     if (userEmail && typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem(`profile_${userEmail}`);
         if (saved) {
           const parsed = JSON.parse(saved);
-          setProfileForm(prev => ({ ...prev, ...parsed }));
+          setProfileForm({
+            fullName: parsed.fullName || '',
+            phone: parsed.phone || '',
+            address: parsed.address || '',
+            landmark: parsed.landmark || '',
+            city: parsed.city || '',
+            pincode: parsed.pincode || '',
+            dietaryPreference: parsed.dietaryPreference || 'ALL',
+            deliveryNotes: parsed.deliveryNotes || ''
+          });
+        } else {
+          // Clean/empty fields for any customer who does not have a saved profile
+          setProfileForm({
+            fullName: '',
+            phone: '',
+            address: '',
+            landmark: '',
+            city: '',
+            pincode: '',
+            dietaryPreference: 'ALL',
+            deliveryNotes: ''
+          });
         }
-      } catch (e) { }
-    }
-  }, [userEmail, showProfileModal]);
+      } catch (e) {
+        setProfileForm({
+          fullName: '',
+          phone: '',
+          address: '',
+          landmark: '',
+          city: '',
+          pincode: '',
+          dietaryPreference: 'ALL',
+          deliveryNotes: ''
+        });
+      }
 
-  const handleSaveProfile = (e) => {
+      // Fetch latest profile from ERP backend
+      if (restaurantId) {
+        fetchCustomerProfile(userEmail, restaurantId)
+          .then(res => {
+            const data = res.data?.data || res.data;
+            if (data && (data.name || data.fullName || data.phone || data.address)) {
+              setProfileForm(prev => {
+                const updated = {
+                  ...prev,
+                  fullName: data.fullName || data.name || prev.fullName,
+                  phone: data.phone || prev.phone,
+                  address: prev.address || data.address || ''
+                };
+                try {
+                  localStorage.setItem(`profile_${userEmail}`, JSON.stringify(updated));
+                } catch {}
+                return updated;
+              });
+            }
+          })
+          .catch(() => {});
+      }
+    } else {
+      setProfileForm({
+        fullName: '',
+        phone: '',
+        address: '',
+        landmark: '',
+        city: '',
+        pincode: '',
+        dietaryPreference: 'ALL',
+        deliveryNotes: ''
+      });
+    }
+  }, [userEmail, restaurantId, showProfileModal]);
+
+  const handleSignOut = () => {
+    document.cookie = 'delivery_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    setIsAuthenticated(false);
+    setUserEmail('');
+    setEmail('');
+    setCustomerOrders([]);
+    setProfileForm({
+      fullName: '',
+      phone: '',
+      address: '',
+      landmark: '',
+      city: '',
+      pincode: '',
+      dietaryPreference: 'ALL',
+      deliveryNotes: ''
+    });
+    setProfileMenuOpen(false);
+    setActiveTab('home');
+  };
+
+  const handleSaveProfile = async (e) => {
     if (e) e.preventDefault();
     if (userEmail && typeof window !== 'undefined') {
       try {
         localStorage.setItem(`profile_${userEmail}`, JSON.stringify(profileForm));
+        
+        // Sync with ERP backend
+        if (restaurantId) {
+          await saveCustomerProfile({
+            clientId: restaurantId,
+            orgId: orgId || null,
+            email: userEmail,
+            fullName: profileForm.fullName,
+            phone: profileForm.phone,
+            address: profileForm.address,
+            landmark: profileForm.landmark,
+            city: profileForm.city,
+            pincode: profileForm.pincode,
+            dietaryPreference: profileForm.dietaryPreference,
+            deliveryNotes: profileForm.deliveryNotes
+          }).catch(err => console.warn('Failed to sync ERP profile', err));
+        }
+
         setProfileMsg('Customer profile saved successfully!');
         setTimeout(() => {
           setProfileMsg('');
@@ -477,12 +582,34 @@ function OrderPageInner({ slugHandle, branchHandle }) {
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp }),
+        body: JSON.stringify({
+          email,
+          otp,
+          clientId: restaurantId,
+          orgId: orgId || null
+        }),
       });
       const data = await res.json();
       if (!res.ok) { setAuthError(data.error || 'Incorrect OTP. Please try again.'); return; }
       setOtpVerified(true);
       setUserEmail(email);
+
+      // Pre-fill profile from ERP response if returned
+      const loadedProfile = {
+        fullName: data.name || '',
+        phone: data.phone || '',
+        address: data.address || '',
+        landmark: '',
+        city: '',
+        pincode: '',
+        dietaryPreference: 'ALL',
+        deliveryNotes: ''
+      };
+      setProfileForm(loadedProfile);
+      try {
+        localStorage.setItem(`profile_${email}`, JSON.stringify(loadedProfile));
+      } catch {}
+
       setTimeout(() => {
         setIsAuthenticated(true);
         setShowLoginModal(false);
@@ -499,18 +626,22 @@ function OrderPageInner({ slugHandle, branchHandle }) {
     if (!userEmail || !restaurantId) return;
     setLoadingOrders(true);
     try {
-      const res = await fetch(`/api/delivery/orders?clientId=${restaurantId}&email=${encodeURIComponent(userEmail)}`);
-      if (res.ok) {
-        const data = await res.json();
-        const list = Array.isArray(data) ? data : (data?.data || data?.orders || []);
-        setCustomerOrders(list);
-      }
+      const res = await fetchCustomerOrdersList(userEmail, restaurantId);
+      const data = res.data?.data || res.data;
+      const list = Array.isArray(data) ? data : (data?.orders || []);
+      setCustomerOrders(list);
     } catch (e) {
-      console.warn('Failed to fetch orders', e);
+      console.warn('Failed to fetch customer orders', e);
     } finally {
       setLoadingOrders(false);
     }
   };
+
+  useEffect(() => {
+    if (activeTab === 'orders' && userEmail && restaurantId) {
+      fetchCustomerOrders();
+    }
+  }, [activeTab, userEmail, restaurantId]);
 
   // ── Cart Handlers ──
   const addItem = (item) => setCart(prev => {
@@ -689,11 +820,7 @@ function OrderPageInner({ slugHandle, branchHandle }) {
                           <span>My Orders</span>
                         </button>
                         <button
-                          onClick={() => {
-                            setProfileMenuOpen(false);
-                            document.cookie = 'delivery_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-                            setIsAuthenticated(false);
-                          }}
+                          onClick={handleSignOut}
                           className="w-full text-left px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2.5 border-t border-stone-100 mt-1 pt-2"
                         >
                           <FiLogOut size={15} />
@@ -1118,11 +1245,7 @@ function OrderPageInner({ slugHandle, branchHandle }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    document.cookie = 'delivery_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-                    setIsAuthenticated(false);
-                    setActiveTab('home');
-                  }}
+                  onClick={handleSignOut}
                   className="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-black px-4 py-2.5 rounded-full uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-2xs"
                 >
                   <FiLogOut size={15} />
@@ -1301,7 +1424,7 @@ function OrderPageInner({ slugHandle, branchHandle }) {
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-xs font-black text-stone-800">
-                              ORDER #{String(order.orderNumber || order.id || idx + 1).slice(-8).toUpperCase()}
+                              ORDER #{String(order.orderNo || order.orderNumber || order.id || idx + 1).slice(-8).toUpperCase()}
                             </span>
                             <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${statusStyle}`}>
                               {statusKey}
